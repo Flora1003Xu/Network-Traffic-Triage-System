@@ -207,6 +207,59 @@ isolation of the affected host is recommended.
 
 ---
 
+## ViGYL Triage Dashboard
+
+A React-based security triage dashboard demo for reviewing sample incidents, inspecting incident details, and viewing supporting Zeek and Suricata log evidence.
+
+### Features
+
+- **Overview page**
+  - Traffic summary metrics
+  - Verdict distribution
+  - Severity breakdown
+
+- **Discover page**
+  - Incident list
+  - Filter by verdict
+  - Filter by severity
+
+- **Incident detail page**
+  - Incident metadata
+  - Full incident report
+  - Parsed Zeek connection log view
+  - Parsed Suricata alert view
+
+- **Built-in sample dataset**
+  - C2 beacon
+  - Tomcat exploitation
+  - DNS tunneling
+  - Port scan
+  - Normal HTTPS traffic
+
+
+### Tech Stack
+
+- React
+- Vite
+- JavaScript (JSX)
+
+
+### Requirements
+
+Install the following first:
+
+- Node.js 18 or newer
+- npm 9 or newer
+
+Check your versions:
+
+```bash
+node -v
+npm -v
+```
+
+---
+
 ## Project Context
 
 This project was developed as part of a university security course. The goal is to demonstrate that LLM-based reasoning can meaningfully reduce SOC alert fatigue while maintaining high detection accuracy.

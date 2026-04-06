@@ -102,13 +102,13 @@ The LLM pipeline shows a consistent **conservative bias** — it tends to over-r
 NEtwork-Traffic-Triage-System/
 ├── README.md
 ├── n8n/
-│   └── workflow_export.json        # n8n workflow (import directly into n8n)
+│   └── n8n-workflow.json        # n8n workflow (import directly into n8n)
 ├── evaluation/
-│   ├── test_cases_100.json         # 100 labelled test cases
+│   ├── test_cases.json         # 100 labelled test cases
+│   ├── 100_eval_results_20260406_114050.json # testing results
 │   ├── run_evaluation.py           # automated evaluation script
 │   └── analyze_severity.py        # severity ±1 analysis script
 └── docs/
-    └── progress_update_II.pptx     # progress presentation slides
 ```
 
 ---

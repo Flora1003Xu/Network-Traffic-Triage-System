@@ -1,0 +1,570 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://single-node-wazuh.indexer-1:9200/wazuh-alerts-4.x-*/_search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "=application/json",
+        "body": "={\n  \"size\": {{ $fromAI(\"NumAlerts\", \"Number of alerts to retrieve from indexer\", number, 10) }},\n  \"sort\": [\n    { \"@timestamp\": { \"order\": \"desc\" } },\n    { \"_id\": \"desc\" }\n  ],\n  \"query\": {\n    \"bool\": {\n      \"filter\": [\n        {\n          \"range\": {\n            \"@timestamp\": {\n              \"gte\": \"now-7d\",\n              \"lt\": \"now\",\n              \"time_zone\": \"America/Denver\"\n            }\n          }\n        },\n        {\n          \"range\": {\n            \"rule.level\": {\n              \"gte\": 1,\n              \"lte\": 12\n            }\n          }\n        },\n        {\n        \"terms\": {\n            \"rule.groups\": [\"suricata\"]\n        }\n        }\n      ]\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"agent.id\",\n    \"agent.name\",\n    \"rule.id\",\n    \"rule.level\",\n    \"rule.description\",\n    \"full_log\",\n    \"rule.groups\"\n  ]\n}\n",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        560,
+        272
+      ],
+      "id": "cf121373-9c77-486a-b451-73bf531c1eae",
+      "name": "Get Suricata Alerts",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://single-node-wazuh.indexer-1:9200/wazuh-alerts-4.x-*/_search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "=application/json",
+        "body": "={\n  \"size\": {{ $fromAI(\"NumAlerts\", \"Number of alerts to retrieve from indexer\", \"number\", 10) }},\n  \"sort\": [\n    { \"@timestamp\": { \"order\": \"desc\" } },\n    { \"_id\": \"desc\" }\n  ],\n  \"query\": {\n    \"bool\": {\n      \"filter\": [\n        {\n          \"range\": {\n            \"@timestamp\": {\n              \"gte\": \"now-7d\",\n              \"lt\": \"now\",\n              \"time_zone\": \"America/Denver\"\n            }\n          }\n        },\n        {\n          \"range\": {\n            \"rule.level\": {\n              \"gte\": 1,\n              \"lte\": 12\n            }\n          }\n        },\n        {\n          \"terms\": {\n            \"rule.groups\": [\"zeek\"]\n          }\n        }\n      ]\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"agent.id\",\n    \"agent.name\",\n    \"rule.id\",\n    \"rule.level\",\n    \"rule.description\",\n    \"full_log\",\n    \"rule.groups\"\n  ]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        384,
+        272
+      ],
+      "id": "f6c9c9c4-e51b-4070-8ef8-2390ffdbfb4e",
+      "name": "Get Zeek Logs",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let parsed;\n  try {\n    const raw = (item.json.output || '')\n      .replace(/```json/g, '')\n      .replace(/```/g, '')\n      .trim();\n    parsed = JSON.parse(raw);\n  } catch (e) {\n    parsed = {\n      verdict: 'unknown',\n      confidence: 0,\n      indicators: [],\n      reasoning: 'Failed to parse: ' + (item.json.output || 'no output')\n    };\n  }\n\n  // source 优先从解析出的 JSON 里取（agent prompt 里要求返回 source 字段）\n  // 如果 agent 没返回 source，从上游 item 取\n  if (!parsed.source) {\n    parsed.source = item.json.source || 'unknown';\n  }\n\n  results.push({ json: parsed });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        672
+      ],
+      "id": "b933ee22-bbcc-42df-a246-199bada55382",
+      "name": "Parse Agent Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst zeek = items.find(i => i.json.source === 'zeek')?.json || {};\nconst suricata = items.find(i => i.json.source === 'suricata')?.json || {};\n\n// 应用 confidence threshold 降级规则\nfunction applyThreshold(result) {\n  if (!result.verdict) return result;\n  \n  // confidence < 0.75 时 malicious 降级为 suspicious\n  if (result.verdict === 'malicious' && result.confidence < 0.75) {\n    return { ...result, verdict: 'suspicious', downgraded: true };\n  }\n  // confidence < 0.5 时 suspicious 降级为 benign\n  if (result.verdict === 'suspicious' && result.confidence < 0.5) {\n    return { ...result, verdict: 'benign', downgraded: true };\n  }\n  return result;\n}\n\nconst zeekAdjusted = applyThreshold(zeek);\nconst suricataAdjusted = applyThreshold(suricata);\n\n// 只有两个来源都认为是 suspicious/malicious 才上报\n// 或者任一为 malicious 且 confidence >= 0.85\nconst bothEscalate = (\n  (zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious') &&\n  (suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious')\n);\n\nconst highConfidenceMalicious = (\n  (zeekAdjusted.verdict === 'malicious' && zeekAdjusted.confidence >= 0.85) ||\n  (suricataAdjusted.verdict === 'malicious' && suricataAdjusted.confidence >= 0.85)\n);\n\n// 综合 verdict：取两者中较严重的，但受 confidence 约束\nfunction combineVerdict(z, s) {\n  const order = { malicious: 3, suspicious: 2, benign: 1, unknown: 0 };\n  const zScore = order[z.verdict] || 0;\n  const sScore = order[s.verdict] || 0;\n  \n  if (zScore >= sScore) return z.verdict;\n  return s.verdict;\n}\n\nreturn [{\n  json: {\n    zeek: zeekAdjusted,\n    suricata: suricataAdjusted,\n    combinedVerdict: combineVerdict(zeekAdjusted, suricataAdjusted),\n    needsEscalation : (\n      zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious' ||\n      suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious'\n    ),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        672
+      ],
+      "id": "1d920ed1-6f41-4c74-a1eb-4533b7a8d580",
+      "name": "Merge Zeek and Suricata"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ec6ee247-9288-4100-8710-9e4327ff99d0",
+              "leftValue": "={{ $json.needsEscalation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1376,
+        672
+      ],
+      "id": "574fd8ac-dedc-43b0-84e0-97f1496e8f63",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a senior SOC analyst. Two specialized agents have pre-triaged network logs.\n\n=== Zeek Agent Findings ===\nVerdict: {{ $json.zeek.verdict }} (confidence: {{ $json.zeek.confidence }})\nIndicators: {{ $json.zeek.indicators }}\nReasoning: {{ $json.zeek.reasoning }}\nDowngraded by threshold: {{ $json.zeek.downgraded || false }}\n\n=== Suricata Agent Findings ===\nVerdict: {{ $json.suricata.verdict }} (confidence: {{ $json.suricata.confidence }})\nIndicators: {{ $json.suricata.indicators }}\nReasoning: {{ $json.suricata.reasoning }}\nDowngraded by threshold: {{ $json.suricata.downgraded || false }}\n\nCombined pre-assessment: {{ $json.combinedVerdict }}\n\nSeverity classification rules — follow STRICTLY:\n\nCRITICAL (must meet ALL of):\n  - Active compromise confirmed (successful login / shell / encryption started)\n  - OR known APT / ransomware / botnet infrastructure confirmed by threat intel\n  - AND both Zeek + Suricata corroborate with high confidence\n\nHIGH (must meet ALL of):\n  - Clear attack confirmed by BOTH sources\n  - No confirmed successful compromise yet\n  - Significant scope: external origin, known malicious signature, or >100 attempts\n\nMEDIUM (any of):\n  - Single-source confirmation only\n  - Low-velocity attack (slow brute force, slow scan, <10 events in window)\n  - Attack confirmed but limited blast radius (internal origin, single target)\n  - Probing / enumeration without exploitation attempt\n\nLOW:\n  - Anomalous but ambiguous\n  - Single weak indicator, no corroboration\n  - Could have legitimate explanation\n\nAdditional rules:\n  - If either agent was downgraded by confidence threshold, lean toward MEDIUM not HIGH\n  - DDoS / flood attacks without service confirmed down = HIGH not CRITICAL\n  - DDoS / flood with confirmed service degradation or outage = CRITICAL\n  - Successful authentication after brute force = always CRITICAL\n  - Exfiltration to known APT infrastructure = always CRITICAL\n  - Probing / scanning only (no exploitation) = MEDIUM at most\n\nYour tasks:\n1. Correlate findings from both sources, considering confidence levels\n2. Apply severity rules above strictly — do not deviate\n3. Generate a structured incident report\n\nReply ONLY with valid JSON, no markdown:\n{\n  \"incident_id\": \"INC-{{ $now.toISO() }}\",\n  \"severity\": \"Low|Medium|High|Critical\",\n  \"verdict\": \"suspicious|malicious\",\n  \"confidence\": 0.95,\n  \"summary\": \"2-3 sentence executive summary\",\n  \"indicators_of_compromise\": [],\n  \"correlated_timeline\": [],\n  \"recommended_actions\": [],\n  \"justification\": \"detailed cross-source reasoning\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1584,
+        576
+      ],
+      "id": "d9dd39da-dbee-4aa8-86cc-268f6cc9a2bf",
+      "name": "Central Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        736
+      ],
+      "id": "1b297ae9-6732-4a50-be23-57e3886fc1e9",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output\n  .replace(/```json/g, '')\n  .replace(/```/g, '')\n  .trim();\n\nlet report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  return [{ json: { response: raw } }];\n}\n\nconst text = `\n🚨 INCIDENT REPORT — ${report.incident_id}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSeverity : ${report.severity}\nVerdict  : ${report.verdict}\nConfidence: ${(report.confidence * 100).toFixed(0)}%\n\n📋 Summary\n${report.summary}\n\n🔍 Indicators of Compromise\n${(report.indicators_of_compromise || []).map(i => `• ${i}`).join('\\n') || '• None identified'}\n\n📅 Correlated Timeline\n${(report.correlated_timeline || []).map(t => `• ${t}`).join('\\n') || '• No timeline data'}\n\n✅ Recommended Actions\n${(report.recommended_actions || []).map(a => `• ${a}`).join('\\n') || '• Continue monitoring'}\n\n🧠 Justification\n${report.justification}\n`.trim();\n\n// 自动保存\nconst fs = require('fs');\nconst timestamp = new Date().toISOString().replace(/[:.]/g, '-');\nconst savePath = `/home/node/reports/incident_${timestamp}.txt`;\nfs.mkdirSync('/home/node/reports', { recursive: true });\nfs.writeFileSync(savePath, text, 'utf8');\n\nreturn [{ json: { \n  response: text + `\\n\\n📁 Report auto-saved to: ${savePath}`\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        576
+      ],
+      "id": "9c82d6d1-ab21-4f87-8df9-ff2ee15073ea",
+      "name": "Format Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { response: \"✅ All logs analyzed. Both Zeek and Suricata classified traffic as benign. No incident generated.\" } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        880
+      ],
+      "id": "2d23adb7-7f6a-4af8-9b3a-d27cf364fac3",
+      "name": "All Benign Output"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "soc-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        672
+      ],
+      "id": "b4748c66-af4d-43c3-b2a1-346f4e9356a0",
+      "name": "Webhook",
+      "webhookId": "35fb753e-83ee-413c-9aea-93d5f481efe0"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2144,
+        576
+      ],
+      "id": "2ee6a337-8c41-423c-a8d4-182e0f208c83",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1728,
+        880
+      ],
+      "id": "987f18cc-bead-4f94-8738-69a7fb2f5db8",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Source: {{ $json.source }}\nLogs:\n{{ $json.logs }}\n\nYou are a network security analyst specializing in Zeek network logs.\nAnalyze the above Zeek logs carefully.\n\nClassification rules (strictly follow):\n- \"benign\": normal traffic, no anomalies\n- \"suspicious\": anomalous BUT only single indicator, low volume, or no corroboration\n- \"malicious\": multiple corroborating indicators, clear attack pattern, no legitimate explanation\n\nConfidence scoring:\n- 0.9-1.0: multiple strong indicators confirmed\n- 0.7-0.89: clear indicators but some ambiguity\n- 0.5-0.69: anomalous but could be legitimate\n- below 0.5: insufficient evidence\n\nReply ONLY with valid JSON, no markdown:\n{\n  \"source\": \"zeek\",\n  \"verdict\": \"benign|suspicious|malicious\",\n  \"confidence\": 0.95,\n  \"indicators\": [\"list of key IOCs\"],\n  \"reasoning\": \"brief explanation\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        848
+      ],
+      "id": "63e8e92f-e668-498b-a9c8-14b0fe6eeca7",
+      "name": "Zeek Triage Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Source: {{ $json.source }}\nLogs:\n{{ $json.logs }}\n\nYou are a network security analyst specializing in Suricata IDS alerts.\nAnalyze the above Suricata alerts carefully.\n\nClassification rules (strictly follow):\n- \"benign\": false positive or benign activity, no real threat\n- \"suspicious\": anomalous BUT alert priority is low (3), single rule match, or ambiguous\n- \"malicious\": high priority alert (1-2), multiple rule matches, confirmed attack signature\n\nConfidence scoring:\n- 0.9-1.0: priority 1 alert, multiple signatures confirmed\n- 0.7-0.89: priority 2 alert or single strong signature\n- 0.5-0.69: priority 3 alert or ambiguous match\n- below 0.5: insufficient evidence\n\nReply ONLY with valid JSON, no markdown:\n{\n  \"source\": \"suricata\",\n  \"verdict\": \"benign|suspicious|malicious\",\n  \"confidence\": 0.95,\n  \"indicators\": [\"list of key rule matches\"],\n  \"reasoning\": \"brief explanation\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        496
+      ],
+      "id": "2cec3c8c-15f9-4b5e-9032-8583483a012c",
+      "name": "Suricata Triage Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        448,
+        672
+      ],
+      "id": "3e677dad-bfe9-4908-abc2-16afea396d3b",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        912,
+        240
+      ],
+      "id": "ca87108e-98a2-4107-bb1c-bb8576ca5f01",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Source: {{ $json.source }}\n\nLogs:\n{{ $json.logs }}\n\nYou are a network security analyst. Analyze the above logs carefully.\n\nClassification rules (strictly follow these):\n- \"benign\": normal traffic, no anomalies, no threat indicators whatsoever\n- \"suspicious\": anomalous behavior BUT only ONE of the following applies:\n  * single indicator without corroboration\n  * low volume anomaly that could have legitimate explanation\n  * unusual but not confirmed malicious pattern\n  * alert from only one source (either behavior OR signature, not both)\n- \"malicious\": ALL of the following must apply:\n  * multiple corroborating indicators present\n  * clear attack pattern with no legitimate explanation\n  * high confidence match to known attack technique\n\nConfidence scoring:\n- 0.9-1.0: multiple strong indicators, confirmed attack pattern\n- 0.7-0.89: clear indicators but some ambiguity\n- 0.5-0.69: anomalous but could be legitimate\n- below 0.5: insufficient evidence\n\nReply ONLY with valid JSON, no markdown:\n{\n  \"source\": \"zeek or suricata\",\n  \"verdict\": \"benign|suspicious|malicious\",\n  \"confidence\": 0.95,\n  \"indicators\": [\"list of key IOCs\"],\n  \"reasoning\": \"brief explanation\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        864,
+        64
+      ],
+      "id": "e0b2d7e4-5ca5-4369-a544-990df995052f",
+      "name": "Zeek & Suricata Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        448,
+        1040
+      ],
+      "id": "0d7fbc69-a09f-447a-bee4-4dd527333569",
+      "name": "Google Gemini Chat Model3",
+      "credentials": {
+        // replace with your actual credential ID and name
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json.body?.chatInput || $input.first().json.chatInput;\n\nlet zeekLogs = '';\nlet suricataLogs = '';\n\ntry {\n  const parsed = JSON.parse(msg);\n  zeekLogs = JSON.stringify(parsed.zeek || parsed.zeekLogs || '');\n  suricataLogs = JSON.stringify(parsed.suricata || parsed.suricataAlerts || '');\n} catch (e) {\n  // 如果不是 JSON，整条消息同时传给两个 agent\n  zeekLogs = msg;\n  suricataLogs = msg;\n}\n\nreturn [\n  { json: { source: 'zeek', logs: zeekLogs } },\n  { json: { source: 'suricata', logs: suricataLogs } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        672
+      ],
+      "id": "28359a0d-c925-46f8-bbc1-88974ac5ef44",
+      "name": "Input handling"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(item => item.json.source === 'zeek');"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        848
+      ],
+      "id": "a4f26de8-42d3-4880-9b6f-45e62a74a98e",
+      "name": "Zeek Filtering"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(item => item.json.source === 'suricata');"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        496
+      ],
+      "id": "5077d748-6327-401c-b736-14ffbbb20d93",
+      "name": "Suricata Filtering"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Zeek Logs": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Get Suricata Alerts": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Parse Agent Output": {
+      "main": [
+        [
+          {
+            "node": "Merge Zeek and Suricata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Zeek and Suricata": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Central Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Benign Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Central Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Central Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Input handling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Benign Output": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Suricata Triage Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zeek & Suricata Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Zeek & Suricata Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Zeek Triage Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suricata Triage Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zeek Triage Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input handling": {
+      "main": [
+        [
+          {
+            "node": "Suricata Filtering",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Zeek Filtering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zeek Filtering": {
+      "main": [
+        [
+          {
+            "node": "Zeek Triage Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suricata Filtering": {
+      "main": [
+        [
+          {
+            "node": "Suricata Triage Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "343a39fe-7f1a-42a6-ad55-cf3b27fe74b0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c1d17fd067adac1bc61dd8f27658908eb7b0bb8e60f782a2443113ca9f22c75d"
+  },
+  "id": "24m1UtXdhLUhjB0m",
+  "tags": []
+}

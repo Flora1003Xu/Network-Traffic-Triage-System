@@ -1,5 +1,5 @@
 {
-  "name": "My workflow",
+  "name": "llm-network-triage",
   "nodes": [
     {
       "parameters": {
@@ -22,10 +22,7 @@
         272
       ],
       "id": "cf121373-9c77-486a-b451-73bf531c1eae",
-      "name": "Get Suricata Alerts",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
+      "name": "Get Suricata Alerts"
     },
     {
       "parameters": {
@@ -48,10 +45,7 @@
         272
       ],
       "id": "f6c9c9c4-e51b-4070-8ef8-2390ffdbfb4e",
-      "name": "Get Zeek Logs",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
+      "name": "Get Zeek Logs"
     },
     {
       "parameters": {
@@ -138,10 +132,7 @@
         736
       ],
       "id": "1b297ae9-6732-4a50-be23-57e3886fc1e9",
-      "name": "Google Gemini Chat Model2",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
+      "name": "Google Gemini Chat Model2"
     },
     {
       "parameters": {
@@ -257,41 +248,7 @@
         672
       ],
       "id": "3e677dad-bfe9-4908-abc2-16afea396d3b",
-      "name": "Google Gemini Chat Model",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1,
-      "position": [
-        912,
-        240
-      ],
-      "id": "ca87108e-98a2-4107-bb1c-bb8576ca5f01",
-      "name": "Google Gemini Chat Model1",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Source: {{ $json.source }}\n\nLogs:\n{{ $json.logs }}\n\nYou are a network security analyst. Analyze the above logs carefully.\n\nClassification rules (strictly follow these):\n- \"benign\": normal traffic, no anomalies, no threat indicators whatsoever\n- \"suspicious\": anomalous behavior BUT only ONE of the following applies:\n  * single indicator without corroboration\n  * low volume anomaly that could have legitimate explanation\n  * unusual but not confirmed malicious pattern\n  * alert from only one source (either behavior OR signature, not both)\n- \"malicious\": ALL of the following must apply:\n  * multiple corroborating indicators present\n  * clear attack pattern with no legitimate explanation\n  * high confidence match to known attack technique\n\nConfidence scoring:\n- 0.9-1.0: multiple strong indicators, confirmed attack pattern\n- 0.7-0.89: clear indicators but some ambiguity\n- 0.5-0.69: anomalous but could be legitimate\n- below 0.5: insufficient evidence\n\nReply ONLY with valid JSON, no markdown:\n{\n  \"source\": \"zeek or suricata\",\n  \"verdict\": \"benign|suspicious|malicious\",\n  \"confidence\": 0.95,\n  \"indicators\": [\"list of key IOCs\"],\n  \"reasoning\": \"brief explanation\"\n}",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        864,
-        64
-      ],
-      "id": "e0b2d7e4-5ca5-4369-a544-990df995052f",
-      "name": "Zeek & Suricata Agent"
+      "name": "Google Gemini Chat Model"
     },
     {
       "parameters": {
@@ -304,10 +261,7 @@
         1040
       ],
       "id": "0d7fbc69-a09f-447a-bee4-4dd527333569",
-      "name": "Google Gemini Chat Model3",
-      "credentials": {
-        // replace with your actual credential ID and name
-      }
+      "name": "Google Gemini Chat Model3"
     },
     {
       "parameters": {
@@ -347,6 +301,19 @@
       ],
       "id": "5077d748-6327-401c-b736-14ffbbb20d93",
       "name": "Suricata Filtering"
+    },
+    {
+      "parameters": {
+        "content": "Wazuh not attached for current evaluation"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        704,
+        272
+      ],
+      "typeVersion": 1,
+      "id": "2c7389ec-74a2-4fc8-9ee4-d55485fde532",
+      "name": "Sticky Note"
     }
   ],
   "pinData": {},
@@ -467,22 +434,6 @@
         ]
       ]
     },
-    "Zeek & Suricata Agent": {
-      "main": [
-        []
-      ]
-    },
-    "Google Gemini Chat Model1": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Zeek & Suricata Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Google Gemini Chat Model3": {
       "ai_languageModel": [
         [
@@ -560,7 +511,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "343a39fe-7f1a-42a6-ad55-cf3b27fe74b0",
+  "versionId": "ec4c06e2-6385-47e9-9e45-5e5888c588cd",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c1d17fd067adac1bc61dd8f27658908eb7b0bb8e60f782a2443113ca9f22c75d"

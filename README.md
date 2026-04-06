@@ -1,8 +1,6 @@
-# ViGYL — LLM-Assisted SOC Triage & Reporting System
+# LLM-Assisted SOC Triage & Reporting System
 
 > An automated alert triage pipeline for Security Operations Centers (SOCs) that uses large language models to classify network intrusion alerts, reduce false positives, and generate structured incident reports.
-
-**Team:** Gilbert · Viknesh · Yue · Lily
 
 ---
 
@@ -101,7 +99,7 @@ The LLM pipeline shows a consistent **conservative bias** — it tends to over-r
 ## Repository Structure
 
 ```
-vigyl-soc-triage/
+NEtwork-Traffic-Triage-System/
 ├── README.md
 ├── n8n/
 │   └── workflow_export.json        # n8n workflow (import directly into n8n)

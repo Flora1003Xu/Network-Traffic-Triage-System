@@ -3,58 +3,12 @@
   "nodes": [
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://single-node-wazuh.indexer-1:9200/wazuh-alerts-4.x-*/_search",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "=application/json",
-        "body": "={\n  \"size\": {{ $fromAI(\"NumAlerts\", \"Number of alerts to retrieve from indexer\", number, 10) }},\n  \"sort\": [\n    { \"@timestamp\": { \"order\": \"desc\" } },\n    { \"_id\": \"desc\" }\n  ],\n  \"query\": {\n    \"bool\": {\n      \"filter\": [\n        {\n          \"range\": {\n            \"@timestamp\": {\n              \"gte\": \"now-7d\",\n              \"lt\": \"now\",\n              \"time_zone\": \"America/Denver\"\n            }\n          }\n        },\n        {\n          \"range\": {\n            \"rule.level\": {\n              \"gte\": 1,\n              \"lte\": 12\n            }\n          }\n        },\n        {\n        \"terms\": {\n            \"rule.groups\": [\"suricata\"]\n        }\n        }\n      ]\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"agent.id\",\n    \"agent.name\",\n    \"rule.id\",\n    \"rule.level\",\n    \"rule.description\",\n    \"full_log\",\n    \"rule.groups\"\n  ]\n}\n",
-        "options": {
-          "allowUnauthorizedCerts": true
-        }
-      },
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.4,
-      "position": [
-        560,
-        272
-      ],
-      "id": "cf121373-9c77-486a-b451-73bf531c1eae",
-      "name": "Get Suricata Alerts"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://single-node-wazuh.indexer-1:9200/wazuh-alerts-4.x-*/_search",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "=application/json",
-        "body": "={\n  \"size\": {{ $fromAI(\"NumAlerts\", \"Number of alerts to retrieve from indexer\", \"number\", 10) }},\n  \"sort\": [\n    { \"@timestamp\": { \"order\": \"desc\" } },\n    { \"_id\": \"desc\" }\n  ],\n  \"query\": {\n    \"bool\": {\n      \"filter\": [\n        {\n          \"range\": {\n            \"@timestamp\": {\n              \"gte\": \"now-7d\",\n              \"lt\": \"now\",\n              \"time_zone\": \"America/Denver\"\n            }\n          }\n        },\n        {\n          \"range\": {\n            \"rule.level\": {\n              \"gte\": 1,\n              \"lte\": 12\n            }\n          }\n        },\n        {\n          \"terms\": {\n            \"rule.groups\": [\"zeek\"]\n          }\n        }\n      ]\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"agent.id\",\n    \"agent.name\",\n    \"rule.id\",\n    \"rule.level\",\n    \"rule.description\",\n    \"full_log\",\n    \"rule.groups\"\n  ]\n}",
-        "options": {
-          "allowUnauthorizedCerts": true
-        }
-      },
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.4,
-      "position": [
-        384,
-        272
-      ],
-      "id": "f6c9c9c4-e51b-4070-8ef8-2390ffdbfb4e",
-      "name": "Get Zeek Logs"
-    },
-    {
-      "parameters": {
         "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let parsed;\n  try {\n    const raw = (item.json.output || '')\n      .replace(/```json/g, '')\n      .replace(/```/g, '')\n      .trim();\n    parsed = JSON.parse(raw);\n  } catch (e) {\n    parsed = {\n      verdict: 'unknown',\n      confidence: 0,\n      indicators: [],\n      reasoning: 'Failed to parse: ' + (item.json.output || 'no output')\n    };\n  }\n\n  // source 优先从解析出的 JSON 里取（agent prompt 里要求返回 source 字段）\n  // 如果 agent 没返回 source，从上游 item 取\n  if (!parsed.source) {\n    parsed.source = item.json.source || 'unknown';\n  }\n\n  results.push({ json: parsed });\n}\n\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        960,
+        1168,
         672
       ],
       "id": "b933ee22-bbcc-42df-a246-199bada55382",
@@ -62,12 +16,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\n\nconst zeek = items.find(i => i.json.source === 'zeek')?.json || {};\nconst suricata = items.find(i => i.json.source === 'suricata')?.json || {};\n\n// 应用 confidence threshold 降级规则\nfunction applyThreshold(result) {\n  if (!result.verdict) return result;\n  \n  // confidence < 0.75 时 malicious 降级为 suspicious\n  if (result.verdict === 'malicious' && result.confidence < 0.75) {\n    return { ...result, verdict: 'suspicious', downgraded: true };\n  }\n  // confidence < 0.5 时 suspicious 降级为 benign\n  if (result.verdict === 'suspicious' && result.confidence < 0.5) {\n    return { ...result, verdict: 'benign', downgraded: true };\n  }\n  return result;\n}\n\nconst zeekAdjusted = applyThreshold(zeek);\nconst suricataAdjusted = applyThreshold(suricata);\n\n// 只有两个来源都认为是 suspicious/malicious 才上报\n// 或者任一为 malicious 且 confidence >= 0.85\nconst bothEscalate = (\n  (zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious') &&\n  (suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious')\n);\n\nconst highConfidenceMalicious = (\n  (zeekAdjusted.verdict === 'malicious' && zeekAdjusted.confidence >= 0.85) ||\n  (suricataAdjusted.verdict === 'malicious' && suricataAdjusted.confidence >= 0.85)\n);\n\n// 综合 verdict：取两者中较严重的，但受 confidence 约束\nfunction combineVerdict(z, s) {\n  const order = { malicious: 3, suspicious: 2, benign: 1, unknown: 0 };\n  const zScore = order[z.verdict] || 0;\n  const sScore = order[s.verdict] || 0;\n  \n  if (zScore >= sScore) return z.verdict;\n  return s.verdict;\n}\n\nreturn [{\n  json: {\n    zeek: zeekAdjusted,\n    suricata: suricataAdjusted,\n    combinedVerdict: combineVerdict(zeekAdjusted, suricataAdjusted),\n    needsEscalation : (\n      zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious' ||\n      suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious'\n    ),\n  }\n}];"
+        "jsCode": "const items = $input.all();\n\nconst zeek = items.find(i => i.json.source === 'zeek')?.json || {};\nconst suricata = items.find(i => i.json.source === 'suricata')?.json || {};\n\n// apply confidence threshold degradation rule\nfunction applyThreshold(result) {\n  if (!result.verdict) return result;\n  \n  // confidence < 0.75, malicious degraded to suspicious\n  if (result.verdict === 'malicious' && result.confidence < 0.75) {\n    return { ...result, verdict: 'suspicious', downgraded: true };\n  }\n  // confidence < 0.5, suspicious degraded to benign\n  if (result.verdict === 'suspicious' && result.confidence < 0.5) {\n    return { ...result, verdict: 'benign', downgraded: true };\n  }\n  return result;\n}\n\nconst zeekAdjusted = applyThreshold(zeek);\nconst suricataAdjusted = applyThreshold(suricata);\n\n// only if both outputs suspicious/malicious\n// or one labelled malicious with confidence >= 0.85\nconst bothEscalate = (\n  (zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious') &&\n  (suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious')\n);\n\nconst highConfidenceMalicious = (\n  (zeekAdjusted.verdict === 'malicious' && zeekAdjusted.confidence >= 0.85) ||\n  (suricataAdjusted.verdict === 'malicious' && suricataAdjusted.confidence >= 0.85)\n);\n\n// verdict：pick higher severity one with confidence constraints\nfunction combineVerdict(z, s) {\n  const order = { malicious: 3, suspicious: 2, benign: 1, unknown: 0 };\n  const zScore = order[z.verdict] || 0;\n  const sScore = order[s.verdict] || 0;\n  \n  if (zScore >= sScore) return z.verdict;\n  return s.verdict;\n}\n\nreturn [{\n  json: {\n    zeek: zeekAdjusted,\n    suricata: suricataAdjusted,\n    combinedVerdict: combineVerdict(zeekAdjusted, suricataAdjusted),\n    needsEscalation : (\n      zeekAdjusted.verdict === 'suspicious' || zeekAdjusted.verdict === 'malicious' ||\n      suricataAdjusted.verdict === 'suspicious' || suricataAdjusted.verdict === 'malicious'\n    ),\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1168,
+        1376,
         672
       ],
       "id": "1d920ed1-6f41-4c74-a1eb-4533b7a8d580",
@@ -100,7 +54,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1376,
+        1584,
         672
       ],
       "id": "574fd8ac-dedc-43b0-84e0-97f1496e8f63",
@@ -115,7 +69,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        1584,
+        1792,
         576
       ],
       "id": "d9dd39da-dbee-4aa8-86cc-268f6cc9a2bf",
@@ -128,20 +82,20 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1584,
+        1792,
         736
       ],
       "id": "1b297ae9-6732-4a50-be23-57e3886fc1e9",
-      "name": "Google Gemini Chat Model2"
+      "name": "Google Gemini Chat Model2",
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.first().json.output\n  .replace(/```json/g, '')\n  .replace(/```/g, '')\n  .trim();\n\nlet report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  return [{ json: { response: raw } }];\n}\n\nconst text = `\n🚨 INCIDENT REPORT — ${report.incident_id}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSeverity : ${report.severity}\nVerdict  : ${report.verdict}\nConfidence: ${(report.confidence * 100).toFixed(0)}%\n\n📋 Summary\n${report.summary}\n\n🔍 Indicators of Compromise\n${(report.indicators_of_compromise || []).map(i => `• ${i}`).join('\\n') || '• None identified'}\n\n📅 Correlated Timeline\n${(report.correlated_timeline || []).map(t => `• ${t}`).join('\\n') || '• No timeline data'}\n\n✅ Recommended Actions\n${(report.recommended_actions || []).map(a => `• ${a}`).join('\\n') || '• Continue monitoring'}\n\n🧠 Justification\n${report.justification}\n`.trim();\n\n// 自动保存\nconst fs = require('fs');\nconst timestamp = new Date().toISOString().replace(/[:.]/g, '-');\nconst savePath = `/home/node/reports/incident_${timestamp}.txt`;\nfs.mkdirSync('/home/node/reports', { recursive: true });\nfs.writeFileSync(savePath, text, 'utf8');\n\nreturn [{ json: { \n  response: text + `\\n\\n📁 Report auto-saved to: ${savePath}`\n}}];"
+        "jsCode": "const raw = $input.first().json.output\n  .replace(/```json/g, '')\n  .replace(/```/g, '')\n  .trim();\n\nlet report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  return [{ json: { response: raw } }];\n}\n\nconst text = `\n🚨 INCIDENT REPORT — ${report.incident_id}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSeverity : ${report.severity}\nVerdict  : ${report.verdict}\nConfidence: ${(report.confidence * 100).toFixed(0)}%\n\n📋 Summary\n${report.summary}\n\n🔍 Indicators of Compromise\n${(report.indicators_of_compromise || []).map(i => `• ${i}`).join('\\n') || '• None identified'}\n\n📅 Correlated Timeline\n${(report.correlated_timeline || []).map(t => `• ${t}`).join('\\n') || '• No timeline data'}\n\n✅ Recommended Actions\n${(report.recommended_actions || []).map(a => `• ${a}`).join('\\n') || '• Continue monitoring'}\n\n🧠 Justification\n${report.justification}\n`.trim();\n\n// 自动保存\nconst fs = require('fs');\nconst timestamp = new Date().toISOString().replace(/[:.]/g, '-');\nconst savePath = `/home/node/reports/incident_${timestamp}.txt`;\nfs.mkdirSync('/home/node/reports', { recursive: true });\nfs.writeFileSync(savePath, text, 'utf8');\n\nconst verdict = report.verdict || 'unknown';\nconst severity = report.severity || 'unknown';\n\nreturn [{ json: { \n  response: text,\n  savedPath: savePath,\n  verdict: verdict,\n  severity: severity,\n  incidentId: report.incident_id || 'unknown'\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1936,
+        2144,
         576
       ],
       "id": "9c82d6d1-ab21-4f87-8df9-ff2ee15073ea",
@@ -154,58 +108,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1520,
+        1728,
         880
       ],
       "id": "2d23adb7-7f6a-4af8-9b3a-d27cf364fac3",
       "name": "All Benign Output"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "soc-triage",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [
-        -224,
-        672
-      ],
-      "id": "b4748c66-af4d-43c3-b2a1-346f4e9356a0",
-      "name": "Webhook",
-      "webhookId": "35fb753e-83ee-413c-9aea-93d5f481efe0"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        2144,
-        576
-      ],
-      "id": "2ee6a337-8c41-423c-a8d4-182e0f208c83",
-      "name": "Respond to Webhook"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        1728,
-        880
-      ],
-      "id": "987f18cc-bead-4f94-8738-69a7fb2f5db8",
-      "name": "Respond to Webhook1"
     },
     {
       "parameters": {
@@ -216,7 +123,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        448,
+        656,
         848
       ],
       "id": "63e8e92f-e668-498b-a9c8-14b0fe6eeca7",
@@ -231,7 +138,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        448,
+        656,
         496
       ],
       "id": "2cec3c8c-15f9-4b5e-9032-8583483a012c",
@@ -244,11 +151,11 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        448,
+        656,
         672
       ],
       "id": "3e677dad-bfe9-4908-abc2-16afea396d3b",
-      "name": "Google Gemini Chat Model"
+      "name": "Google Gemini Chat Model",
     },
     {
       "parameters": {
@@ -257,77 +164,135 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        448,
+        656,
         1040
       ],
       "id": "0d7fbc69-a09f-447a-bee4-4dd527333569",
-      "name": "Google Gemini Chat Model3"
+      "name": "Google Gemini Chat Model3",
     },
     {
       "parameters": {
-        "jsCode": "const msg = $input.first().json.body?.chatInput || $input.first().json.chatInput;\n\nlet zeekLogs = '';\nlet suricataLogs = '';\n\ntry {\n  const parsed = JSON.parse(msg);\n  zeekLogs = JSON.stringify(parsed.zeek || parsed.zeekLogs || '');\n  suricataLogs = JSON.stringify(parsed.suricata || parsed.suricataAlerts || '');\n} catch (e) {\n  // 如果不是 JSON，整条消息同时传给两个 agent\n  zeekLogs = msg;\n  suricataLogs = msg;\n}\n\nreturn [\n  { json: { source: 'zeek', logs: zeekLogs } },\n  { json: { source: 'suricata', logs: suricataLogs } }\n];"
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
       "position": [
-        -32,
-        672
+        -304,
+        640
       ],
-      "id": "28359a0d-c925-46f8-bbc1-88974ac5ef44",
-      "name": "Input handling"
+      "id": "95398283-767b-4778-8977-d98dd638078a",
+      "name": "Schedule Trigger"
     },
     {
       "parameters": {
-        "jsCode": "return $input.all().filter(item => item.json.source === 'zeek');"
+        "jsCode": "const now = new Date();\nconst fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);\n\nreturn [{\n  json: {\n    from: fiveMinAgo.toISOString(),\n    to: now.toISOString()\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        176,
-        848
+        -96,
+        640
       ],
-      "id": "a4f26de8-42d3-4880-9b6f-45e62a74a98e",
-      "name": "Zeek Filtering"
+      "id": "b68daa03-c9a9-4796-92b2-f8cc4be2b9c4",
+      "name": "Build Time Range"
     },
     {
       "parameters": {
-        "jsCode": "return $input.all().filter(item => item.json.source === 'suricata');"
+        "method": "POST",
+        "url": "https://100.67.226.34:9200/.ds-logs-suricata.alerts-so-*/_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "ApiKey <your apikey>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"size\": 100,\n  \"query\": {\n    \"range\": {\n      \"@timestamp\": {\n        \"gte\": \"{{ $json.from }}\",\n        \"lte\": \"{{ $json.to }}\"\n      }\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"rule.severity\",\n    \"rule.name\",\n    \"rule.category\",\n    \"source.ip\",\n    \"source.port\",\n    \"destination.ip\",\n    \"destination.port\",\n    \"network.transport\",\n    \"source.message\"\n  ],\n  \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
       "position": [
-        176,
+        144,
         496
       ],
-      "id": "5077d748-6327-401c-b736-14ffbbb20d93",
-      "name": "Suricata Filtering"
+      "id": "e786555c-d0c7-4608-b78f-b705ad97a133",
+      "name": "Get Suricata Alerts"
     },
     {
       "parameters": {
-        "content": "Wazuh not attached for current evaluation"
+        "method": "POST",
+        "url": "https://100.67.226.34:9200/.ds-logs-zeek-so-*/_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "ApiKey <your apikey>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"size\": 200,\n  \"query\": {\n    \"bool\": {\n      \"must\": [\n        {\n          \"range\": {\n            \"@timestamp\": {\n              \"gte\": \"{{ $('Build Time Range').first().json.from }}\",\n              \"lte\": \"{{ $('Build Time Range').first().json.to }}\"\n            }\n          }\n        },\n        {\n          \"terms\": {\n            \"container.id\": [\n              \"conn.log\",\n              \"dns.log\",\n              \"http.log\",\n              \"ssl.log\",\n              \"notice.log\",\n              \"weird.log\",\n              \"kerberos.log\",\n              \"rdp.log\",\n              \"smb_files.log\",\n              \"smb_mapping.log\",\n              \"dce_rpc.log\"\n            ]\n          }\n        }\n      ]\n    }\n  },\n  \"_source\": [\n    \"@timestamp\",\n    \"container.id\",\n    \"source.ip\",\n    \"source.port\",\n    \"source.geo.country_iso_code\",\n    \"destination.ip\",\n    \"destination.port\",\n    \"network.transport\",\n    \"network.protocol\",\n    \"network.bytes\",\n    \"event.duration\",\n    \"zeek\",\n    \"dns\",\n    \"http\",\n    \"tls\",\n    \"url\",\n    \"notice\",\n    \"weird\",\n    \"kerberos\",\n    \"rdp\",\n    \"smb\"\n  ],\n  \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
       },
-      "type": "n8n-nodes-base.stickyNote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
       "position": [
-        704,
-        272
+        144,
+        848
       ],
-      "typeVersion": 1,
-      "id": "2c7389ec-74a2-4fc8-9ee4-d55485fde532",
-      "name": "Sticky Note"
+      "id": "94597437-a60f-473c-a2ea-b7117dc18353",
+      "name": "Get Zeek Logs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const zeekHits = $input.first().json.hits?.hits || [];\n\nconst zeekByType = {};\nfor (const h of zeekHits) {\n  const s = h._source;\n  const logType = s.container?.id || 'unknown';\n  if (!zeekByType[logType]) zeekByType[logType] = [];\n\n  let line = `ts=${s['@timestamp']}`;\n  if (s.source?.ip)         line += ` src=${s.source.ip}:${s.source?.port || '?'}`;\n  if (s.destination?.ip)    line += ` dst=${s.destination.ip}:${s.destination?.port || '?'}`;\n  if (s.network?.transport) line += ` proto=${s.network.transport}`;\n  if (s.network?.protocol)  line += ` service=${s.network.protocol}`;\n\n  if (logType === 'conn.log') {\n    if (s.event?.duration !== undefined) line += ` duration=${s.event.duration}`;\n    if (s.network?.bytes !== undefined)  line += ` bytes=${s.network.bytes}`;\n    if (s.source?.geo?.country_iso_code) line += ` src_country=${s.source.geo.country_iso_code}`;\n  } else if (logType === 'dns.log') {\n    const z = s.zeek?.dns || s.dns || {};\n    if (z.query)      line += ` query=\"${z.query}\"`;\n    if (z.qtype_name) line += ` type=${z.qtype_name}`;\n    if (z.rcode_name) line += ` rcode=${z.rcode_name}`;\n  } else if (logType === 'http.log') {\n    const z = s.zeek?.http || s.http || {};\n    if (z.method)              line += ` method=${z.method}`;\n    if (z.uri || s.url?.original) line += ` uri=\"${z.uri || s.url?.original}\"`;\n    if (z.status_code)         line += ` status=${z.status_code}`;\n    if (z.user_agent)          line += ` ua=\"${z.user_agent}\"`;\n  } else if (logType === 'ssl.log') {\n    const z = s.zeek?.ssl || s.tls || {};\n    if (z.server_name || s.tls?.client?.server_name)\n      line += ` sni=\"${z.server_name || s.tls?.client?.server_name}\"`;\n    if (z.validation_status) line += ` cert_valid=${z.validation_status}`;\n  } else if (logType === 'notice.log') {\n    const z = s.zeek?.notice || s.notice || {};\n    if (z.note || z.note_type) line += ` note=\"${z.note || z.note_type}\"`;\n    if (z.message || z.msg)    line += ` msg=\"${z.message || z.msg}\"`;\n  } else if (logType === 'weird.log') {\n    const z = s.zeek?.weird || s.weird || {};\n    if (z.name) line += ` weird=\"${z.name}\"`;\n    if (z.addl) line += ` detail=\"${z.addl}\"`;\n  } else if (logType === 'kerberos.log') {\n    const z = s.zeek?.kerberos || s.kerberos || {};\n    if (z.request_type)          line += ` req_type=${z.request_type}`;\n    if (z.client)                line += ` client=\"${z.client}\"`;\n    if (z.service)               line += ` service=\"${z.service}\"`;\n    if (z.success !== undefined) line += ` success=${z.success}`;\n  } else if (logType === 'rdp.log') {\n    const z = s.zeek?.rdp || s.rdp || {};\n    if (z.cookie)                     line += ` cookie=\"${z.cookie}\"`;\n    if (z.auth_success !== undefined) line += ` auth=${z.auth_success}`;\n  } else if (logType === 'smb_files.log') {\n    const z = s.zeek?.smb_files || s.smb || {};\n    if (z.action) line += ` action=${z.action}`;\n    if (z.path)   line += ` path=\"${z.path}\"`;\n    if (z.name)   line += ` file=\"${z.name}\"`;\n  }\n\n  zeekByType[logType].push(line);\n}\n\nconst priorityOrder = [\n  'notice.log','weird.log','conn.log','dns.log',\n  'http.log','ssl.log','kerberos.log','rdp.log',\n  'smb_files.log','dce_rpc.log'\n];\n\nlet zeekText = 'No Zeek logs in this time window.';\nif (zeekHits.length > 0) {\n  const ordered = [\n    ...priorityOrder.filter(t => zeekByType[t]),\n    ...Object.keys(zeekByType).filter(t => !priorityOrder.includes(t))\n  ];\n  zeekText = ordered.map(logType => {\n    return `=== ${logType.replace('.log','')} (${zeekByType[logType].length} events) ===\\n`\n      + zeekByType[logType].join('\\n');\n  }).join('\\n\\n');\n}\n\nreturn [{ json: { source: 'zeek', logs: zeekText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        848
+      ],
+      "id": "9094c831-dbc6-4a24-b9cb-dcd302d9f9b9",
+      "name": "Format Zeek"
+    },
+    {
+      "parameters": {
+        "jsCode": "const suricataHits = $input.first().json.hits?.hits || [];\n\nconst suricataText = suricataHits.length === 0\n  ? 'No Suricata alerts in this time window.'\n  : suricataHits.map(h => {\n      const s = h._source;\n      return [\n        `ts=${s['@timestamp']}`,\n        `src=${s.source?.ip}:${s.source?.port}`,\n        `dst=${s.destination?.ip}:${s.destination?.port}`,\n        `proto=${s.network?.transport}`,\n        `severity=${s.rule?.severity}`,\n        `signature=\"${s.rule?.name}\"`,\n        `category=\"${s.rule?.category}\"`\n      ].filter(Boolean).join(' ');\n    }).join('\\n');\n\nreturn [{ json: { source: 'suricata', logs: suricataText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        496
+      ],
+      "id": "07df1c50-7452-4f0e-96d2-fea36eba8e6f",
+      "name": "Format Suricata"
     }
   ],
   "pinData": {},
   "connections": {
-    "Get Zeek Logs": {
-      "ai_tool": [
-        []
-      ]
-    },
-    "Get Suricata Alerts": {
-      "ai_tool": [
-        []
-      ]
-    },
     "Parse Agent Output": {
       "main": [
         [
@@ -392,35 +357,12 @@
     },
     "Format Report": {
       "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Input handling",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "All Benign Output": {
       "main": [
-        [
-          {
-            "node": "Respond to Webhook1",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Google Gemini Chat Model": {
@@ -467,38 +409,71 @@
         ]
       ]
     },
-    "Input handling": {
+    "Schedule Trigger": {
       "main": [
         [
           {
-            "node": "Suricata Filtering",
+            "node": "Build Time Range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Time Range": {
+      "main": [
+        [
+          {
+            "node": "Get Zeek Logs",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Zeek Filtering",
+            "node": "Get Suricata Alerts",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Zeek Filtering": {
+    "Get Zeek Logs": {
       "main": [
         [
           {
-            "node": "Zeek Triage Agent",
+            "node": "Format Zeek",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Suricata Filtering": {
+    "Get Suricata Alerts": {
+      "main": [
+        [
+          {
+            "node": "Format Suricata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Suricata": {
       "main": [
         [
           {
             "node": "Suricata Triage Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Zeek": {
+      "main": [
+        [
+          {
+            "node": "Zeek Triage Agent",
             "type": "main",
             "index": 0
           }
@@ -511,7 +486,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "ec4c06e2-6385-47e9-9e45-5e5888c588cd",
+  "versionId": "6dd52414-13b6-4567-8429-a8be2dd7b93f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c1d17fd067adac1bc61dd8f27658908eb7b0bb8e60f782a2443113ca9f22c75d"

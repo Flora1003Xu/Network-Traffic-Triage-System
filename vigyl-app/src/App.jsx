@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SAMPLE_DATA = [
   {
@@ -242,6 +242,148 @@ Standard HTTPS connection to Cloudflare CDN infrastructure. Traffic volume and t
   }
 ];
 
+const DEFAULT_POLL_MS = Number.parseInt(import.meta.env.VITE_REPORTS_POLL_MS ?? "30000", 10);
+const REPORTS_API_URL = buildApiUrl(import.meta.env.VITE_REPORTS_API_BASE_URL, "/api/reports");
+
+function buildApiUrl(baseUrl, path) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (!baseUrl) return normalizedPath;
+  return `${baseUrl.replace(/\/+$/, "")}${normalizedPath}`;
+}
+
+function normalizeVerdict(value) {
+  const verdict = String(value || "").toLowerCase();
+  if (["malicious", "suspicious", "benign"].includes(verdict)) return verdict;
+  if (["alert", "confirmed", "incident"].includes(verdict)) return "malicious";
+  if (["unknown", "review"].includes(verdict)) return "suspicious";
+  return "benign";
+}
+
+function normalizeSeverity(value) {
+  const severity = String(value || "").toLowerCase();
+  if (["critical", "high", "medium", "low"].includes(severity)) return severity;
+  if (["sev1", "p1", "1"].includes(severity)) return "critical";
+  if (["sev2", "p2", "2"].includes(severity)) return "high";
+  if (["sev3", "p3", "3"].includes(severity)) return "medium";
+  if (["sev4", "p4", "4", "info"].includes(severity)) return "low";
+  return "medium";
+}
+
+function toIsoTimestamp(value) {
+  if (!value) return new Date().toISOString();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
+}
+
+function extractReportField(reportText, labels) {
+  if (!reportText) return "";
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = reportText.match(new RegExp(`^${escaped}\\s*:\\s*(.+)$`, "im"));
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+function extractFirstIp(value) {
+  const match = String(value || "").match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+  return match ? match[0] : "";
+}
+
+function extractPort(value) {
+  const match = String(value || "").match(/\b(\d{1,5})\/(?:TCP|UDP)\b/i) || String(value || "").match(/:(\d{1,5})\b/);
+  return match?.[1] || "";
+}
+
+function formatScenario(incident, reportText) {
+  const attackType =
+    incident.scenario ||
+    incident.title ||
+    incident.name ||
+    incident.category ||
+    extractReportField(reportText, ["Attack Type"]) ||
+    incident.group_type ||
+    "";
+
+  if (!attackType) return "New Incident";
+
+  return attackType
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeIncident(rawIncident, index = 0) {
+  const incident = rawIncident || {};
+  const timestamp = toIsoTimestamp(
+    incident.timestamp ||
+    incident.generated_at ||
+    incident.created_at ||
+    incident.received_at ||
+    incident.ts
+  );
+  const reportText =
+    incident.report ||
+    incident.report_text ||
+    incident.incident_report ||
+    incident.response ||
+    incident.body ||
+    incident.summary ||
+    "No report body provided.";
+  const id =
+    incident.id ||
+    incident.incident_id ||
+    incident.report_id ||
+    `INC-${timestamp}-${index + 1}`;
+  const extractedSourceIps = extractReportField(reportText, ["Source IPs", "Source IP"]);
+  const extractedTargetIps = extractReportField(reportText, ["Target IPs", "Destination IPs", "Target IP"]);
+  const extractedIocs = extractReportField(reportText, ["Indicators of Compromise", "Indicators"]);
+  const sourceIp = incident.src_ip || incident.srcIp || incident.source_ip || extractFirstIp(extractedSourceIps) || extractFirstIp(extractedIocs) || "-";
+  const destinationIp = incident.dst_ip || incident.dstIp || incident.destination_ip || extractFirstIp(extractedTargetIps) || "-";
+  const destinationPort =
+    incident.dst_port ||
+    incident.dstPort ||
+    incident.destination_port ||
+    extractPort(extractedIocs) ||
+    "-";
+
+  return {
+    id,
+    scenario: formatScenario(incident, reportText),
+    verdict: normalizeVerdict(incident.verdict || incident.classification || incident.label),
+    severity: normalizeSeverity(incident.severity || incident.priority || incident.level),
+    rationale: incident.rationale || incident.reason || incident.summary || "",
+    input: {
+      zeek: incident.input?.zeek || incident.zeek || incident.zeek_log || incident.zeek_logs || "",
+      suricata: incident.input?.suricata || incident.suricata || incident.suricata_alert || incident.suricata_alerts || "",
+    },
+    src_ip: sourceIp,
+    dst_ip: destinationIp,
+    src_port: incident.src_port || incident.srcPort || incident.source_port || "-",
+    dst_port: destinationPort,
+    timestamp,
+    report: reportText,
+  };
+}
+
+function normalizeIncidentList(payload) {
+  const reports = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.reports)
+      ? payload.reports
+      : payload?.incident
+        ? [payload.incident]
+        : payload
+          ? [payload]
+          : [];
+
+  return reports
+    .map((incident, index) => normalizeIncident(incident, index))
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
 const SEVERITY_CONFIG = {
   critical: { label: "Critical", bg: "#500000", color: "#ffb3b3", border: "#a32d2d" },
   high: { label: "High", bg: "#3d2000", color: "#ffcf7a", border: "#854f0b" },
@@ -306,25 +448,17 @@ function BarChart({ data }) {
 }
 
 function Overview({ incidents, onNav }) {
-  const total_raw = incidents.reduce((s, i) => {
-    const zLines = i.input.zeek.trim() ? i.input.zeek.trim().split("\n").length : 0;
-    const sLines = i.input.suricata.trim() ? i.input.suricata.trim().split("\n").length : 0;
-    return s + zLines + sLines;
-  }, 0);
   const malicious = incidents.filter(i => i.verdict === "malicious").length;
   const suspicious = incidents.filter(i => i.verdict === "suspicious").length;
   const benign = incidents.filter(i => i.verdict === "benign").length;
   const critical = incidents.filter(i => i.severity === "critical").length;
-  const reduction = Math.round(((total_raw - incidents.length) / total_raw) * 100);
 
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Traffic Overview</div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <MetricCard label="Raw Log Lines" value={total_raw} />
           <MetricCard label="Incidents" value={incidents.length} />
-          <MetricCard label="Alert Reduction" value={`${reduction}%`} accent="#5dcaa5" />
           <MetricCard label="Critical" value={critical} accent="#f09595" />
         </div>
       </div>
@@ -736,16 +870,113 @@ export default function App() {
   const [page, setPage] = useState("overview");
   const [selected, setSelected] = useState(null);
   const [filters, setFilters] = useState({ verdict: "all", severity: "all" });
+  const [incidents, setIncidents] = useState(SAMPLE_DATA);
+  const [apiState, setApiState] = useState({
+    loading: true,
+    error: "",
+    lastSync: "",
+    source: "sample",
+  });
+  const selectedIdRef = useRef(null);
 
   function handleSelect(incident) {
+    selectedIdRef.current = incident.id;
     setSelected(incident);
     setPage("detail");
   }
 
   function handleBack() {
+    selectedIdRef.current = null;
     setSelected(null);
     setPage("discover");
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReports() {
+      try {
+        const response = await fetch(REPORTS_API_URL, {
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const nextIncidents = normalizeIncidentList(payload);
+
+        if (cancelled) return;
+
+        if (nextIncidents.length > 0) {
+          setIncidents(nextIncidents);
+          setApiState({
+            loading: false,
+            error: "",
+            lastSync: new Date().toISOString(),
+            source: "api",
+          });
+          return;
+        }
+
+        setIncidents(SAMPLE_DATA);
+        setApiState({
+          loading: false,
+          error: "",
+          lastSync: new Date().toISOString(),
+          source: "sample",
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        setIncidents(SAMPLE_DATA);
+        setApiState({
+          loading: false,
+          error: error.message || "Failed to load reports",
+          lastSync: "",
+          source: "sample",
+        });
+      }
+    }
+
+    loadReports();
+    const timer = window.setInterval(loadReports, Number.isFinite(DEFAULT_POLL_MS) ? DEFAULT_POLL_MS : 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedIdRef.current) return;
+
+    const refreshedSelected = incidents.find((incident) => incident.id === selectedIdRef.current);
+    if (refreshedSelected) {
+      setSelected(refreshedSelected);
+      return;
+    }
+
+    setSelected(null);
+    if (page === "detail") {
+      setPage("discover");
+    }
+  }, [incidents, page]);
+
+  const statusColor = apiState.source === "api" ? "#1d9e75" : apiState.error ? "#ef9f27" : "#378add";
+  const statusLabel = apiState.loading
+    ? "SYNCING"
+    : apiState.source === "api"
+      ? "API LIVE"
+      : apiState.error
+        ? "SAMPLE MODE"
+        : "WAITING FOR REPORTS";
+  const statusText = apiState.lastSync
+    ? `Last sync ${new Date(apiState.lastSync).toLocaleTimeString()}`
+    : apiState.error
+      ? apiState.error
+      : "POST reports to /api/reports";
 
   return (
     <div style={{
@@ -792,8 +1023,8 @@ export default function App() {
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#1d9e75", boxShadow: "0 0 6px #1d9e75" }} />
-          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em" }}>LIVE</span>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, boxShadow: `0 0 6px ${statusColor}` }} />
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em" }}>{statusLabel}</span>
         </div>
       </div>
 
@@ -803,10 +1034,32 @@ export default function App() {
         margin: 0,
         padding: "28px"
       }}>
-        {page === "overview" && <Overview incidents={SAMPLE_DATA} onNav={setPage} />}
+        <div style={{
+          marginBottom: 18,
+          padding: "10px 14px",
+          borderRadius: 8,
+          background: "rgba(255,255,255,0.03)",
+          border: "0.5px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          alignItems: "center",
+        }}>
+          <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)" }}>
+            Reports API
+          </span>
+          <span style={{ fontFamily: "monospace", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+            POST {REPORTS_API_URL}
+          </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+            {statusText}
+          </span>
+        </div>
+
+        {page === "overview" && <Overview incidents={incidents} onNav={setPage} />}
         {page === "discover" && (
           <Discover
-            incidents={SAMPLE_DATA}
+            incidents={incidents}
             onSelect={handleSelect}
             filters={filters}
             setFilters={setFilters}

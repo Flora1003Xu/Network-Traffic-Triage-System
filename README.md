@@ -236,6 +236,11 @@ A React-based security triage dashboard demo for reviewing sample incidents, ins
   - Port scan
   - Normal HTTPS traffic
 
+- **Live report ingestion**
+  - `POST /api/reports` to push newly generated reports into the dashboard
+  - `GET /api/reports` to fetch all received reports
+  - Falls back to sample incidents when no live reports have been received yet
+
 
 ### Tech Stack
 
@@ -257,6 +262,53 @@ Check your versions:
 node -v
 npm -v
 ```
+
+### Run the dashboard with the reports API
+
+In one terminal:
+
+```bash
+cd vigyl-app
+npm run api
+```
+
+In a second terminal:
+
+```bash
+cd vigyl-app
+npm run dev
+```
+
+The dashboard will poll the local API every 30 seconds and automatically replace the sample data once real reports arrive.
+
+### Push a new report into the dashboard
+
+Your backend can send either a single JSON object or `{ "reports": [...] }` to:
+
+```bash
+curl -X POST http://127.0.0.1:3001/api/reports \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "INC-2026-04-22-001",
+    "scenario": "Periodic Beaconing",
+    "verdict": "malicious",
+    "severity": "critical",
+    "src_ip": "192.168.10.24",
+    "src_port": 51432,
+    "dst_ip": "203.0.113.55",
+    "dst_port": 443,
+    "timestamp": "2026-04-22T14:05:00Z",
+    "report": "Beaconing pattern detected every 300 seconds.",
+    "input": {
+      "zeek": "1745321100.000000 C1 192.168.10.24 51432 203.0.113.55 443 tcp ssl 2.0 512 4096 SF T T 0 ShADadfFr 4 720 3 4380",
+      "suricata": "[1:2025901:3] ET MALWARE Suspicious Beacon [Priority: 1] 2026-04-22T14:05:00 192.168.10.24:51432 -> 203.0.113.55:443 TCP"
+    }
+  }'
+```
+
+Supported input aliases include `incident_id`/`report_id`, `generated_at`, `priority`, `zeek`, `suricata`, `source_ip`, and `destination_ip`, so your backend does not need to match the dashboard schema exactly.
+
+If you see `AggregateError [ECONNREFUSED]`, it usually means the API process is not running yet, or `localhost` is resolving to an address your environment is not listening on. Start `npm run api` first and use `http://127.0.0.1:3001` rather than `localhost`.
 
 ---
 
